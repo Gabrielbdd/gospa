@@ -1,0 +1,14 @@
+# Configuration overrides. Proto defaults apply when a key is omitted here.
+# See proto/gospa/config/v1/config.proto for the full schema.
+app:
+  name: gospa
+  port: 3000
+
+database:
+  dsn: "postgres://postgres:postgres@localhost:5432/gospa?sslmode=disable"
+  auto_migrate: true
+
+# Auth is opt-in. Uncomment and configure once ZITADEL is running.
+# auth:
+#   issuer: "http://localhost:8081"
+#   audience: "<ZITADEL project ID for API application>"

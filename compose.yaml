@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: ${GOFRA_POSTGRES_IMAGE:-postgres:18.3-alpine3.23}
+    restart: unless-stopped
+    shm_size: 256mb
+    environment:
+      POSTGRES_USER: ${GOFRA_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${GOFRA_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${GOFRA_DB_NAME:-gospa}
+    ports:
+      - "${GOFRA_DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --dbname=$${POSTGRES_DB} --username=$${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+volumes:
+  postgres_data:

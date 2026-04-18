@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package gospa.config.v1;
+
+import "gofra/config/v1/annotations.proto";
+
+// Config is the root configuration for the application.
+message Config {
+  // Server configuration.
+  AppConfig app = 1;
+
+  // Public browser-safe configuration served at /_gofra/config.js.
+  PublicConfig public = 2;
+
+  // Database configuration.
+  DatabaseConfig database = 3;
+
+  // Authentication configuration for JWT validation.
+  AuthConfig auth = 4;
+}
+
+// AuthConfig holds server-side authentication settings for JWT validation.
+// Auth is opt-in: the server skips JWT enforcement when issuer or audience is
+// empty, so a fresh starter remains runnable without ZITADEL infrastructure.
+message AuthConfig {
+  // ZITADEL issuer URL used for OIDC discovery and JWKS fetching.
+  // Leave empty to disable auth (useful during early development).
+  string issuer = 1;
+
+  // Expected audience claim in JWT access tokens (typically the ZITADEL
+  // project ID for the API application). Leave empty to disable auth.
+  string audience = 2;
+}
+
+// DatabaseConfig holds PostgreSQL connection and pool settings.
+message DatabaseConfig {
+  // PostgreSQL connection string in URL or keyword/value format.
+  string dsn = 1 [(gofra.config.v1.field).secret = true, (gofra.config.v1.field).default_value.string_value = "postgres://postgres:postgres@localhost:5432/gospa?sslmode=disable"];
+
+  // Maximum number of connections in the pool (0 = pgxpool default).
+  int32 max_conns = 2;
+
+  // Minimum number of idle connections maintained (0 = pgxpool default).
+  int32 min_conns = 3;
+
+  // Maximum time a connection can be reused, as a Go duration string such as 1h. Empty uses pgxpool default.
+  string max_conn_lifetime = 4;
+
+  // Maximum time a connection can sit idle, as a Go duration string such as 30m. Empty uses pgxpool default.
+  string max_conn_idle_time = 5;
+
+  // Interval between pool health checks, as a Go duration string such as 1m. Empty uses pgxpool default.
+  string health_check_period = 6;
+
+  // Run goose migrations on startup. Safe for dev; use a separate migration step in production.
+  bool auto_migrate = 7;
+}
+
+// AppConfig holds server-side application settings.
+message AppConfig {
+  // Application name, used in logs and runtime display.
+  string name = 1 [(gofra.config.v1.field).default_value.string_value = "gospa"];
+
+  // HTTP server port.
+  int32 port = 2 [(gofra.config.v1.field).default_value.int32_value = 3000];
+}
+
+// PublicConfig holds browser-safe configuration delivered to the frontend.
+// All fields in this message and its children are served to the browser.
+message PublicConfig {
+  // Display name shown in the browser.
+  string app_name = 1 [(gofra.config.v1.field).default_value.string_value = "gospa"];
+
+  // Base URL for API calls from the frontend.
+  string api_base_url = 2 [(gofra.config.v1.field).default_value.string_value = "http://localhost:3000"];
+
+  // Authentication configuration.
+  PublicAuthConfig auth = 3;
+}
+
+// PublicAuthConfig holds browser-safe OIDC authentication settings.
+message PublicAuthConfig {
+  // OIDC issuer URL (ZITADEL runs on :8081 in the default docker-compose setup).
+  string issuer = 1 [(gofra.config.v1.field).default_value.string_value = "http://localhost:8081"];
+
+  // OIDC browser client ID.
+  string client_id = 2 [(gofra.config.v1.field).default_value.string_value = "gospa-web"];
+
+  // OIDC scopes requested during login.
+  repeated string scopes = 3 [(gofra.config.v1.field).default_value.string_list = {values: ["openid", "profile", "email"]}];
+
+  // Auth callback path.
+  string redirect_path = 4 [(gofra.config.v1.field).default_value.string_value = "/auth/callback"];
+
+  // Redirect path after logout.
+  string post_logout_redirect_path = 5 [(gofra.config.v1.field).default_value.string_value = "/"];
+}
