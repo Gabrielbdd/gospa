@@ -1,0 +1,34 @@
+# Quick-run Docker Compose example for Gospa.
+# Not a production deployment — see README.md in this directory.
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-postgres:18.3-alpine3.23}
+    restart: unless-stopped
+    shm_size: 256mb
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-gospa}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --dbname=$${POSTGRES_DB} --username=$${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  app:
+    image: ${GOSPA_IMAGE:-ghcr.io/gabrielbdd/gospa:edge}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOFRA_DATABASE__DSN: "postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-gospa}?sslmode=disable"
+    ports:
+      - "${APP_PORT:-3000}:3000"
+
+volumes:
+  postgres_data:
