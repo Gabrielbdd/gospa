@@ -1,18 +1,22 @@
-# gospa
+# Gospa
 
-This project was created by `gofra new`.
+Gospa is an open-source PSA (Professional Services Automation) for MSPs,
+built on top of the [Gofra](https://github.com/Gabrielbdd/gofra) Go framework.
 
-## Current Starter Scope
+The product vision, market analysis, feature scope, and architectural
+roadmap live in [`docs/blueprint/index.md`](docs/blueprint/index.md). This
+README covers how to run, test, and build what exists today.
 
-This starter is intentionally minimal. It proves the current contract between:
+## Current Scope
 
-- the framework library imported from `github.com/Gabrielbdd/gofra`
-- the application-owned files generated into this project
+Gospa is still in early bootstrap. Today the app is the framework's canonical
+starter applied with `--module github.com/Gabrielbdd/gospa` — enough to prove
+the framework contract, not yet the product described in the blueprint.
 
-Today the starter includes:
+Today the app provides:
 
 - a runnable Go HTTP server in `cmd/app` using chi, with health check probes
-  and graceful shutdown via the framework's `runtime/health` and `runtime/serve`
+  and graceful shutdown via Gofra's `runtime/health` and `runtime/serve`
 - a proto-driven config schema in `proto/gospa/config/v1/config.proto`
 - config code generation via `mise run generate` (produces `config/*_gen.go`)
 - optional YAML overrides in `gofra.yaml`
@@ -20,6 +24,8 @@ Today the starter includes:
 - `mise run infra` tasks that work with either Docker Compose or Podman Compose
 - a minimal embedded web shell in `web/`
 - health check endpoints at `/startupz`, `/livez`, `/readyz` (Kubernetes convention)
+- a multi-stage `Dockerfile` producing a static distroless image
+- `.github/workflows/ci.yml` running tests, build, and a local image build
 
 Config fields, defaults, and descriptions are defined once in the proto file.
 Run `mise run generate` after editing the proto to regenerate the Go code.
