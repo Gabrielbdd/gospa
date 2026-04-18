@@ -4,10 +4,10 @@ go = "1.25"
 [tasks.generate]
 description = "Generate config code from proto"
 run = """
-GOFLAGS=-mod=mod go run github.com/Gabrielbdd/gofra/cmd/gofra generate config \
+GOWORK=off GOFLAGS=-mod=mod go run github.com/Gabrielbdd/gofra/cmd/gofra generate config \
   -runtime github.com/Gabrielbdd/gofra/runtime/config \
   proto/gospa/config/v1/config.proto
-go mod tidy
+GOWORK=off go mod tidy
 """
 
 [tasks.test]
