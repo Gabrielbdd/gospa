@@ -18,5 +18,17 @@ services:
       retries: 20
       start_period: 5s
 
+  app:
+    profiles: ["app"]
+    image: ghcr.io/gabrielbdd/gospa:edge
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      GOFRA_DATABASE__DSN: "postgres://${GOFRA_DB_USER:-postgres}:${GOFRA_DB_PASSWORD:-postgres}@postgres:5432/${GOFRA_DB_NAME:-gospa}?sslmode=disable"
+    ports:
+      - "3000:3000"
+
 volumes:
   postgres_data:

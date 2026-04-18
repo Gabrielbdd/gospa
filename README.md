@@ -7,6 +7,76 @@ The product vision, market analysis, feature scope, and architectural
 roadmap live in [`docs/blueprint/index.md`](docs/blueprint/index.md). This
 README covers how to run, test, and build what exists today.
 
+## Run with Docker Compose
+
+The fastest way to try Gospa locally:
+
+```bash
+docker compose --profile app up -d
+docker compose --profile app logs -f app   # follow startup logs
+```
+
+This pulls `ghcr.io/gabrielbdd/gospa:edge`, starts it alongside a local
+PostgreSQL, applies migrations automatically on startup, and exposes the
+app at <http://localhost:3000>.
+
+**What to expect right now.** Gospa is still early bootstrap. Landing at
+<http://localhost:3000> today shows a placeholder page from the framework
+starter, not the full PSA product described in
+[`docs/blueprint/index.md`](docs/blueprint/index.md). If you want to see
+the scaffold wired up end-to-end — HTTP server, health probes, Postgres,
+migrations, config handler — this is the fastest way. If you want to see
+product features (tickets, billing, etc.), those are not implemented yet.
+
+Check the app is responding:
+
+```bash
+curl http://localhost:3000/readyz              # 200 when Postgres is reachable
+curl http://localhost:3000/livez               # 200 while the process runs
+curl http://localhost:3000/_gofra/config.js    # browser-safe runtime config
+```
+
+To pin a specific version, edit the `image:` line in `compose.yaml`
+(for example `ghcr.io/gabrielbdd/gospa:v0.1.0` or
+`ghcr.io/gabrielbdd/gospa:sha-abc1234`). The Compose file is the source
+of truth — no environment variable indirection is exposed for this.
+
+Update to the latest `edge`:
+
+```bash
+docker compose --profile app pull
+docker compose --profile app up -d
+```
+
+Stop it:
+
+```bash
+docker compose --profile app down              # stop + keep Postgres data
+docker compose --profile app down --volumes    # stop + wipe Postgres volume
+```
+
+**Platform note.** Images are published for `linux/arm64` only in this
+iteration. If you need `linux/amd64`, build from source with
+`docker build -t gospa:dev .` for now; multi-arch publishing is a
+follow-up.
+
+**First-time caveat.** The `edge` tag only exists after the publish
+workflow runs on `main` for the first time. If you clone before that and
+`docker compose --profile app up -d` fails with a "manifest not found"
+error, pick a specific tag from the
+[Packages page](https://github.com/Gabrielbdd/gospa/pkgs/container/gospa)
+and edit the `image:` line in `compose.yaml` to use it.
+
+Available tags:
+
+- `edge` — rolling latest on `main`
+- `sha-<short>` — immutable per commit
+- `vX.Y.Z`, `vX.Y`, `latest` — on GitHub releases
+
+The "Run" section below covers the development workflow (app on host,
+Postgres via Compose) — use that when you want to modify Gospa, not just
+run it.
+
 ## Current Scope
 
 Gospa is still in early bootstrap. Today the app is the framework's canonical
