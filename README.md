@@ -72,6 +72,13 @@ Known MVP debts (no install key, single PAT for bootstrap + runtime,
 no authz yet, Restate deferred, single-replica install) are recorded
 in [`docs/blueprint/index.md` § Apêndice C](docs/blueprint/index.md#apêndice-c--mvp-debts-identidade--onboarding).
 
+[`docs/operations.md`](docs/operations.md) enumerates every dev and
+Kubernetes scenario explicitly — fresh clone, re-run, full reset,
+stop-without-wipe, mid-install crash, PAT rotation, ZITADEL image
+upgrade, multi-tenant — with the expected behaviour and the recovery
+path for each. Read it before asking "why doesn't my state come
+back" or "why is ZITADEL returning 401".
+
 ## Run
 
 ```bash

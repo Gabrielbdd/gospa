@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	runtimeauth "github.com/Gabrielbdd/gofra/runtime/auth"
 	runtimeconfig "github.com/Gabrielbdd/gofra/runtime/config"
@@ -137,6 +138,22 @@ func main() {
 		Queries: queries,
 		Zitadel: zitadelClient,
 		Logger:  slog.Default(),
+	}
+
+	// Recover from crashes mid-install. If the previous process died
+	// between MarkWorkspaceProvisioning and MarkWorkspaceReady/Failed,
+	// the singleton row is stuck in `provisioning` and POST /install
+	// returns FailedPrecondition forever. The old orchestrator
+	// goroutine is dead (it lived in the previous process), so it is
+	// safe to flip the state to `failed` here and let the user retry
+	// via the wizard.
+	if ws, wsErr := queries.GetWorkspace(ctx); wsErr == nil && string(ws.InstallState) == "provisioning" {
+		recoverMsg := "previous process exited during provisioning; retry from /install"
+		if err := queries.MarkWorkspaceFailed(ctx, pgtype.Text{String: recoverMsg, Valid: true}); err != nil {
+			slog.Warn("could not recover workspace from provisioning state", "error", err)
+		} else {
+			slog.Warn("workspace was stuck in provisioning; transitioned to failed so /install can retry")
+		}
 	}
 
 	// Eager activation for established deployments: if the workspace is
