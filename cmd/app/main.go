@@ -29,6 +29,7 @@ import (
 	"github.com/Gabrielbdd/gospa/internal/installtoken"
 	"github.com/Gabrielbdd/gospa/internal/publicconfig"
 	"github.com/Gabrielbdd/gospa/internal/zitadel"
+	"github.com/Gabrielbdd/gospa/internal/zitadelcontract"
 	"github.com/Gabrielbdd/gospa/web"
 )
 
@@ -131,7 +132,12 @@ func main() {
 	// /install RPCs stay public forever: even after activation they
 	// return FailedPrecondition if install_state != not_initialized, so
 	// repeated clicks are safe to serve without auth.
-	gate := authgate.New(cfg.Zitadel.AdminAPIURL, runtimeauth.PublicProcedures(
+	//
+	// The gate no longer carries a fixed issuer; both issuer and
+	// audience come from the persisted auth contract on every Activate
+	// call, so deploys can rotate either independently of the static
+	// app config.
+	gate := authgate.New(runtimeauth.PublicProcedures(
 		installv1connect.InstallServiceGetStatusProcedure,
 		installv1connect.InstallServiceInstallProcedure,
 	))
@@ -141,10 +147,12 @@ func main() {
 		Zitadel: zitadelClient,
 		Config:  cfg,
 		Logger:  slog.Default(),
-		OnReady: func(_ context.Context, projectID string) error {
+		OnReady: func(_ context.Context, contract zitadelcontract.Contract) error {
 			// Detach from the request context — the install request has
-			// already returned by the time Activate runs.
-			return gate.Activate(context.Background(), projectID)
+			// already returned by the time Activate runs. Issuer +
+			// audience come from the freshly-derived contract so the
+			// gate matches what was just persisted.
+			return gate.Activate(context.Background(), contract.IssuerURL, contract.APIAudience)
 		},
 	}
 	installHandler := &install.Handler{
@@ -206,9 +214,33 @@ func main() {
 	// auth on immediately instead of waiting for a new install. Must run
 	// after app.Use(gate.Middleware) so the gate's passthrough is wired —
 	// otherwise Activate fails with ErrMiddlewareNotMounted.
-	if ws, wsErr := queries.GetWorkspace(ctx); wsErr == nil &&
-		string(ws.InstallState) == "ready" && ws.ZitadelProjectID.Valid {
-		if err := gate.Activate(ctx, ws.ZitadelProjectID.String); err != nil {
+	//
+	// Reads the persisted contract directly: issuer + audience are
+	// already on the workspace row (from S5 install or read-repair).
+	// If either is still missing after the read-repair pass above, the
+	// contract is broken and the app refuses to start rather than fall
+	// back to inferring from cfg.Zitadel.AdminAPIURL like the legacy
+	// path used to.
+	if ws, wsErr := queries.GetWorkspace(ctx); wsErr == nil && string(ws.InstallState) == "ready" {
+		issuer := ""
+		if ws.ZitadelIssuerUrl.Valid {
+			issuer = ws.ZitadelIssuerUrl.String
+		}
+		audience := ""
+		if ws.ZitadelApiAudience.Valid {
+			audience = ws.ZitadelApiAudience.String
+		}
+		if issuer == "" || audience == "" {
+			slog.Error(
+				"workspace is ready but persisted auth contract is incomplete after read-repair; refusing to start",
+				"issuer_present", issuer != "",
+				"audience_present", audience != "",
+				"hint", "set GOFRA_AUTH__ISSUER and/or GOFRA_AUTH__AUDIENCE so the next startup can repair the row",
+			)
+			pool.Close()
+			os.Exit(1)
+		}
+		if err := gate.Activate(ctx, issuer, audience); err != nil {
 			slog.Error("auth gate startup activation failed; refusing to start", "error", err)
 			pool.Close()
 			os.Exit(1)

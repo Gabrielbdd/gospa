@@ -23,7 +23,6 @@ var ErrMiddlewareNotMounted = errors.New("authgate: Middleware has not been moun
 
 // Gate holds the dynamic JWT middleware state.
 type Gate struct {
-	issuer   string
 	isPublic runtimeauth.ProcedureMatcher
 
 	// passthrough is the chain the middleware delegates to while
@@ -37,11 +36,14 @@ type Gate struct {
 	active atomic.Pointer[http.Handler]
 }
 
-// New returns a Gate that will validate JWTs against the given issuer
-// when Activate is called. isPublic lists Connect procedures that skip
+// New returns a Gate ready to be mounted. The issuer + audience pair
+// is supplied per Activate call (not at construction) because both
+// values are persisted on the workspace row and may differ between
+// pre-install (no contract yet) and post-install (full contract from
+// ZITADEL provisioning). isPublic lists Connect procedures that skip
 // authentication even after activation — typically the install RPCs.
-func New(issuer string, isPublic runtimeauth.ProcedureMatcher) *Gate {
-	return &Gate{issuer: issuer, isPublic: isPublic}
+func New(isPublic runtimeauth.ProcedureMatcher) *Gate {
+	return &Gate{isPublic: isPublic}
 }
 
 // Middleware is a chi-compatible middleware. It starts as a
@@ -57,13 +59,14 @@ func (g *Gate) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// Activate constructs a JWT verifier for the given audience and swaps
-// the middleware into authenticated mode. Safe to call multiple times:
-// the latest verifier wins (useful if the workspace is re-installed).
-// Returns an error if the verifier cannot be constructed (OIDC
-// discovery network failure, malformed issuer) or if the middleware
+// Activate constructs a JWT verifier for the given issuer + audience
+// pair and swaps the middleware into authenticated mode. Safe to call
+// multiple times: the latest verifier wins (useful if the workspace is
+// re-installed against a new ZITADEL). Returns an error if either
+// argument is empty, if the verifier cannot be constructed (OIDC
+// discovery network failure, malformed issuer), or if the middleware
 // has not been mounted yet.
-func (g *Gate) Activate(ctx context.Context, audience string) error {
+func (g *Gate) Activate(ctx context.Context, issuer, audience string) error {
 	// Fail fast on misuse before doing any network I/O. If the caller
 	// invoked Activate before mounting Middleware, OIDC discovery would
 	// otherwise mask the real bug behind a network error.
@@ -71,13 +74,16 @@ func (g *Gate) Activate(ctx context.Context, audience string) error {
 	if pt == nil {
 		return ErrMiddlewareNotMounted
 	}
-	verifier, err := runtimeauth.NewJWTVerifier(ctx, g.issuer, audience)
+	if issuer == "" || audience == "" {
+		return errors.New("authgate: issuer and audience are both required for activation")
+	}
+	verifier, err := runtimeauth.NewJWTVerifier(ctx, issuer, audience)
 	if err != nil {
 		return err
 	}
 	wrapped := runtimeauth.NewMiddleware(verifier, g.isPublic)(*pt)
 	g.active.Store(&wrapped)
-	slog.Info("auth gate activated", "issuer", g.issuer, "audience", audience)
+	slog.Info("auth gate activated", "issuer", issuer, "audience", audience)
 	return nil
 }
 

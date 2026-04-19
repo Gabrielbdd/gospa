@@ -13,7 +13,7 @@ import (
 )
 
 func TestGate_PassesThroughBeforeActivate(t *testing.T) {
-	gate := authgate.New("http://unused.local", runtimeauth.PublicProcedures())
+	gate := authgate.New(runtimeauth.PublicProcedures())
 
 	var invoked bool
 	mw := gate.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -34,9 +34,9 @@ func TestGate_PassesThroughBeforeActivate(t *testing.T) {
 }
 
 func TestGate_ActivateBeforeMountReturnsError(t *testing.T) {
-	gate := authgate.New("http://unused.local", runtimeauth.PublicProcedures())
+	gate := authgate.New(runtimeauth.PublicProcedures())
 
-	err := gate.Activate(t.Context(), "some-audience")
+	err := gate.Activate(t.Context(), "http://unused.local", "some-audience")
 	if err == nil {
 		t.Fatal("expected error when activating before Middleware has been mounted")
 	}
@@ -45,6 +45,25 @@ func TestGate_ActivateBeforeMountReturnsError(t *testing.T) {
 	}
 	if gate.IsActive() {
 		t.Error("gate should not be active after a failed Activate")
+	}
+}
+
+func TestGate_ActivateRejectsEmptyIssuerOrAudience(t *testing.T) {
+	gate := authgate.New(runtimeauth.PublicProcedures())
+	// Mount middleware so the rejection is for empty args, not the
+	// not-mounted guard.
+	_ = gate.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	if err := gate.Activate(t.Context(), "", "aud"); err == nil {
+		t.Error("expected error when issuer is empty")
+	}
+	if err := gate.Activate(t.Context(), "http://issuer.example.com", ""); err == nil {
+		t.Error("expected error when audience is empty")
+	}
+	if gate.IsActive() {
+		t.Error("gate should not be active after rejected Activate calls")
 	}
 }
 
@@ -59,7 +78,7 @@ func TestGate_ActivateAfterMountSucceeds(t *testing.T) {
 	srv := newOIDCDiscoveryStub(t)
 	defer srv.Close()
 
-	gate := authgate.New(srv.URL, runtimeauth.PublicProcedures())
+	gate := authgate.New(runtimeauth.PublicProcedures())
 
 	// Mount middleware first — this is what cmd/app/main.go must do
 	// before calling Activate.
@@ -67,7 +86,7 @@ func TestGate_ActivateAfterMountSucceeds(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	if err := gate.Activate(t.Context(), "test-audience"); err != nil {
+	if err := gate.Activate(t.Context(), srv.URL, "test-audience"); err != nil {
 		t.Fatalf("Activate failed after Middleware mount: %v", err)
 	}
 	if !gate.IsActive() {

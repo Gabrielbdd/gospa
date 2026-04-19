@@ -15,6 +15,7 @@ import (
 	"github.com/Gabrielbdd/gospa/db/sqlc"
 	"github.com/Gabrielbdd/gospa/internal/install"
 	"github.com/Gabrielbdd/gospa/internal/zitadel"
+	"github.com/Gabrielbdd/gospa/internal/zitadelcontract"
 )
 
 // fakeQueries is a hand-written stand-in for the sqlc Queries struct,
@@ -139,14 +140,14 @@ func TestOrchestrator_Run_HappyPath_PersistsAllSevenFieldsAndMarksReady(t *testi
 		addProjectResp: "proj-1",
 		addOIDCResp:    zitadel.AddOIDCAppResponse{AppID: "app-1", ClientID: "cli-1"},
 	}
-	var onReadyProject string
+	var onReadyContract zitadelcontract.Contract
 	o := install.Orchestrator{
 		Queries: q,
 		Zitadel: z,
 		Config:  newConfig("https://issuer.example.com", "", "https://admin.example.com"),
 		Logger:  newLogger(),
-		OnReady: func(_ context.Context, projectID string) error {
-			onReadyProject = projectID
+		OnReady: func(_ context.Context, contract zitadelcontract.Contract) error {
+			onReadyContract = contract
 			return nil
 		},
 	}
@@ -155,8 +156,16 @@ func TestOrchestrator_Run_HappyPath_PersistsAllSevenFieldsAndMarksReady(t *testi
 		t.Fatalf("Run: %v", err)
 	}
 
-	if onReadyProject != "proj-1" {
-		t.Errorf("OnReady received project id %q; want %q", onReadyProject, "proj-1")
+	// OnReady receives the freshly-derived contract, not just the
+	// project id. cmd/app uses it to call gate.Activate(issuer, audience).
+	if onReadyContract.IssuerURL != "https://issuer.example.com" {
+		t.Errorf("OnReady contract issuer = %q; want explicit cfg.Auth.Issuer", onReadyContract.IssuerURL)
+	}
+	if onReadyContract.APIAudience != "proj-1" {
+		t.Errorf("OnReady contract audience = %q; want project_id", onReadyContract.APIAudience)
+	}
+	if onReadyContract.ManagementURL != "https://admin.example.com" {
+		t.Errorf("OnReady contract management = %q; want admin URL", onReadyContract.ManagementURL)
 	}
 
 	if z.setUpOrgReq.OrgName != "Acme MSP" {
@@ -228,7 +237,7 @@ func TestOrchestrator_Run_OrgFailureMarksFailedAndStops(t *testing.T) {
 		Queries: q,
 		Zitadel: z,
 		Logger:  newLogger(),
-		OnReady: func(_ context.Context, _ string) error {
+		OnReady: func(_ context.Context, _ zitadelcontract.Contract) error {
 			onReadyCalled = true
 			return nil
 		},
