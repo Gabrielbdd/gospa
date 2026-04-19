@@ -69,15 +69,70 @@ Every non-trivial task follows this sequence:
 
 1. **Investigate** — read the relevant blueprint section(s), the
    corresponding proto(s), the current Go code, and tests.
+
+   **Deep research for non-trivial changes.** "Non-trivial" here means any
+   change that touches a proto contract, introduces a migration, adds a new
+   product feature, or shifts the boundary with the framework. Isolated bug
+   fixes and pure doc edits are exempt.
+
+   For non-trivial changes, before moving on, produce:
+
+   - Known architectural patterns for the domain in play (ticketing,
+     time tracking, billing, RMM integration, companies/contacts,
+     invoicing, etc.).
+   - How mature PSAs solve the same problem — ConnectWise Manage,
+     Autotask, HaloPSA / Halo, SuperOps, Atera, Syncro. Include the
+     open-source references ITFlow and Alga PSA when applicable.
+   - What users praise, complain about, and ask for, with the source
+     cited (competitor docs, G2 / Capterra reviews, r/msp threads,
+     MSP community forums).
+   - Explicit statements of business, UX, and operational impact — not
+     "we'll see", but the concrete consequences you expect.
+   - At least two alternatives beyond the one you plan to propose, with
+     a one-line reason each was or was not chosen.
+
 2. **Clarify** — confirm the problem and scope with the user if anything is
    uncertain.
+
 3. **Plan and present** — describe what will change and where, before
-   touching files. Include a confidence breakdown (`problem X/10 · context Y/10 · solution Z/10`).
+   touching files. Include a confidence breakdown using this template:
+
+   ```
+   Confidence:
+     - Architectural:    NN%  (alignment with the blueprint and product rules)
+     - Business / PO:    NN%  (alignment with MSP value and the roadmap in docs/blueprint)
+     - User perspective: NN% — persona: <named persona>
+                         (default: an MSP technician; switch to
+                          "MSP's end client" or "MSP owner" when the
+                          change targets a different role)
+     - Solution:         NN%  (correctness and completeness of the proposed plan)
+   ```
+
+   Any axis below 70% means you must state what you are unsure about and
+   what would raise your confidence. Silence on a low score is not
+   acceptable.
+
 4. **Gate** — wait for user approval before implementing.
+
 5. **Implement** — follow the approved plan; re-present if you deviate
    meaningfully.
+
 6. **Validate** — `mise run test`, `mise run build`, and, for anything
-   touching the image, `docker build`.
+   touching the image, `docker build`. Changes that affect deployment or
+   day-to-day operation (`Dockerfile`, `compose.yaml`, `mise.toml`,
+   `docs/examples/deploy/**`) require reviewing and, when necessary,
+   updating the corresponding runbooks in `docs/` and the deploy
+   examples. Realistic validation is part of the contract:
+
+   - run `mise run test` and `mise run build`;
+   - run `docker build -t gospa:dev .` when the image, Dockerfile, or
+     `compose.yaml` changed;
+   - for UI-visible changes, open the app in a browser and confirm it
+     works before declaring the task done.
+
+   For long-running work that will span sessions, follow the convention
+   in [`docs/project/agent-workflow.md`](docs/project/agent-workflow.md)
+   and keep a progress file current.
 
 ### Framework vs product boundary
 
