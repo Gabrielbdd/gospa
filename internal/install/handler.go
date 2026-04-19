@@ -113,6 +113,7 @@ func (h *Handler) Install(ctx context.Context, req *connect.Request[installv1.In
 		AdminEmail:    req.Msg.InitialUser.GetEmail(),
 		AdminFirst:    req.Msg.InitialUser.GetGivenName(),
 		AdminLast:     req.Msg.InitialUser.GetFamilyName(),
+		AdminPassword: req.Msg.InitialUser.GetPassword(),
 		APIBaseURL:    h.APIBaseURL,
 	}
 
@@ -153,6 +154,12 @@ func validateInstallRequest(r *installv1.InstallRequest) error {
 	}
 	if r.InitialUser == nil || r.InitialUser.Email == "" {
 		return errors.New("initial_user.email is required")
+	}
+	// 8 chars is the minimum we enforce locally; ZITADEL's own policy
+	// (digits, case, etc.) is enforced server-side and surfaces as a
+	// 400 from the SetUpOrg call if violated.
+	if len(r.InitialUser.Password) < 8 {
+		return errors.New("initial_user.password must be at least 8 characters")
 	}
 	return nil
 }

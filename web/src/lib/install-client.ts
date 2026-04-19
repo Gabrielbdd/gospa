@@ -17,6 +17,7 @@ export interface InitialUser {
   email: string;
   givenName: string;
   familyName: string;
+  password: string;
 }
 
 export interface InstallRequest {

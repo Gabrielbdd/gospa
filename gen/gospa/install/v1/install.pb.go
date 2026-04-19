@@ -176,10 +176,16 @@ func (x *GetStatusResponse) GetZitadelOrgId() string {
 
 // InitialUser captures the first human admin to create in the MSP org.
 type InitialUser struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Email         string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
-	GivenName     string                 `protobuf:"bytes,2,opt,name=given_name,json=givenName,proto3" json:"given_name,omitempty"`
-	FamilyName    string                 `protobuf:"bytes,3,opt,name=family_name,json=familyName,proto3" json:"family_name,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Email      string                 `protobuf:"bytes,1,opt,name=email,proto3" json:"email,omitempty"`
+	GivenName  string                 `protobuf:"bytes,2,opt,name=given_name,json=givenName,proto3" json:"given_name,omitempty"`
+	FamilyName string                 `protobuf:"bytes,3,opt,name=family_name,json=familyName,proto3" json:"family_name,omitempty"`
+	// Password the wizard sets on the first admin user. Without it
+	// ZITADEL would issue an init code over email and the operator
+	// cannot complete login on a self-hosted setup with no SMTP. Min
+	// 8 characters; ZITADEL enforces its own password policy (digit,
+	// case, etc.) on top of that.
+	Password      string `protobuf:"bytes,4,opt,name=password,proto3" json:"password,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -231,6 +237,13 @@ func (x *InitialUser) GetGivenName() string {
 func (x *InitialUser) GetFamilyName() string {
 	if x != nil {
 		return x.FamilyName
+	}
+	return ""
+}
+
+func (x *InitialUser) GetPassword() string {
+	if x != nil {
+		return x.Password
 	}
 	return ""
 }
@@ -366,13 +379,14 @@ const file_gospa_install_v1_install_proto_rawDesc = "" +
 	"\x11GetStatusResponse\x124\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x1e.gospa.install.v1.InstallStateR\x05state\x12#\n" +
 	"\rinstall_error\x18\x02 \x01(\tR\finstallError\x12$\n" +
-	"\x0ezitadel_org_id\x18\x03 \x01(\tR\fzitadelOrgId\"c\n" +
+	"\x0ezitadel_org_id\x18\x03 \x01(\tR\fzitadelOrgId\"\x7f\n" +
 	"\vInitialUser\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1d\n" +
 	"\n" +
 	"given_name\x18\x02 \x01(\tR\tgivenName\x12\x1f\n" +
 	"\vfamily_name\x18\x03 \x01(\tR\n" +
-	"familyName\"\xe1\x01\n" +
+	"familyName\x12\x1a\n" +
+	"\bpassword\x18\x04 \x01(\tR\bpassword\"\xe1\x01\n" +
 	"\x0eInstallRequest\x12%\n" +
 	"\x0eworkspace_name\x18\x01 \x01(\tR\rworkspaceName\x12%\n" +
 	"\x0eworkspace_slug\x18\x02 \x01(\tR\rworkspaceSlug\x12\x1a\n" +

@@ -33,11 +33,18 @@ type Client interface {
 // a new organization together with its first human admin user (granted
 // ORG_OWNER implicitly). Used by the install orchestrator for the MSP
 // root org.
+//
+// Password is required: without it ZITADEL emails an "init code" the
+// user must redeem to set their password, which fails on any deploy
+// without configured SMTP (the local docker-compose ZITADEL has none).
+// Supplying a password up front makes the freshly-created admin
+// immediately able to log in with email + password.
 type SetUpOrgRequest struct {
 	OrgName   string
 	UserEmail string
 	FirstName string
 	LastName  string
+	Password  string
 }
 
 type SetUpOrgResponse struct {
@@ -82,6 +89,12 @@ type setUpOrgHumanWire struct {
 	UserName string              `json:"userName"`
 	Profile  setUpOrgProfileWire `json:"profile"`
 	Email    setUpOrgEmailWire   `json:"email"`
+	// Password is the initial password the user logs in with. The
+	// ZITADEL Admin _setup endpoint accepts a plain string here and
+	// hashes it server-side. Omitted via omitempty so older callers
+	// (or the AddOrganization path) that do not provide a password
+	// still produce a valid request.
+	Password string `json:"password,omitempty"`
 }
 
 type setUpOrgProfileWire struct {
@@ -122,6 +135,7 @@ func (c *HTTPClient) SetUpOrg(ctx context.Context, req SetUpOrgRequest) (SetUpOr
 				Email:           req.UserEmail,
 				IsEmailVerified: true,
 			},
+			Password: req.Password,
 		},
 	}
 	var out setUpOrgWireResponse

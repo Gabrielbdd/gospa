@@ -65,6 +65,7 @@ func validRequest() *connect.Request[installv1.InstallRequest] {
 			Email:      "admin@acme.test",
 			GivenName:  "Ada",
 			FamilyName: "Lovelace",
+			Password:   "correct-horse-battery-staple",
 		},
 	})
 }

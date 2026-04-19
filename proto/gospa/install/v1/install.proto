@@ -38,6 +38,12 @@ message InitialUser {
   string email = 1;
   string given_name = 2;
   string family_name = 3;
+  // Password the wizard sets on the first admin user. Without it
+  // ZITADEL would issue an init code over email and the operator
+  // cannot complete login on a self-hosted setup with no SMTP. Min
+  // 8 characters; ZITADEL enforces its own password policy (digit,
+  // case, etc.) on top of that.
+  string password = 4;
 }
 
 message InstallRequest {

@@ -129,6 +129,7 @@ func newInput() install.Input {
 		AdminEmail:    "admin@acme.test",
 		AdminFirst:    "Adam",
 		AdminLast:     "Admin",
+		AdminPassword: "correct-horse-battery-staple",
 		APIBaseURL:    "http://localhost:3000",
 	}
 }
@@ -170,6 +171,9 @@ func TestOrchestrator_Run_HappyPath_PersistsAllSevenFieldsAndMarksReady(t *testi
 
 	if z.setUpOrgReq.OrgName != "Acme MSP" {
 		t.Errorf("org name not forwarded: %+v", z.setUpOrgReq)
+	}
+	if z.setUpOrgReq.Password != "correct-horse-battery-staple" {
+		t.Errorf("admin password not forwarded to SetUpOrg: %+v", z.setUpOrgReq)
 	}
 	if z.addProjectOrg != "org-1" {
 		t.Errorf("project created under wrong org: %q", z.addProjectOrg)

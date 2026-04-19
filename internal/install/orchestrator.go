@@ -38,6 +38,10 @@ type Input struct {
 	AdminEmail    string
 	AdminFirst    string
 	AdminLast     string
+	// AdminPassword is set on the freshly-created admin user so they
+	// can log in immediately. Without it ZITADEL would email an init
+	// code, which fails on any deploy without configured SMTP.
+	AdminPassword string
 	// APIBaseURL is the browser-visible base URL the OIDC SPA should
 	// redirect back to; used to derive the OIDC app's RedirectURIs and
 	// post-logout URIs. Typically cfg.Public.ApiBaseUrl.
@@ -88,6 +92,7 @@ func (o *Orchestrator) Run(ctx context.Context, in Input) error {
 		UserEmail: in.AdminEmail,
 		FirstName: in.AdminFirst,
 		LastName:  in.AdminLast,
+		Password:  in.AdminPassword,
 	})
 	if err != nil {
 		return fail("create_org", err)

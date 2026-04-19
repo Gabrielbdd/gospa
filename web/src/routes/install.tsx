@@ -87,6 +87,7 @@ function InstallPage() {
       email: "",
       givenName: "",
       familyName: "",
+      password: "",
     },
     onSubmit: async ({ value }) => {
       installMutation.mutate({
@@ -99,6 +100,7 @@ function InstallPage() {
             email: value.email,
             givenName: value.givenName,
             familyName: value.familyName,
+            password: value.password,
           },
         },
         token: value.installToken.trim(),
@@ -240,6 +242,24 @@ function InstallPage() {
               )}
             </form.Field>
           </div>
+          <form.Field name="password">
+            {(field) => (
+              <Field
+                label="Initial password"
+                hint="Min 8 characters. Used for first login; ZITADEL applies its own policy on top (digit, case)."
+              >
+                <input
+                  type="password"
+                  className={inputClass}
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  minLength={8}
+                  required
+                  autoComplete="new-password"
+                />
+              </Field>
+            )}
+          </form.Field>
 
           {installMutation.isError && (
             <p className="text-sm text-destructive">
