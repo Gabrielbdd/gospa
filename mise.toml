@@ -35,11 +35,13 @@ go run ./cmd/app
 """
 
 [tasks.infra]
-description = "Start PostgreSQL with Docker or Podman and wait until ready"
+description = "Start local infrastructure (PostgreSQL + ZITADEL), wait, and materialise the provisioner PAT"
 run = """
 . ./scripts/load-env.sh
 sh ./scripts/compose.sh up -d
 sh ./scripts/wait-for-postgres.sh
+sh ./scripts/wait-for-zitadel.sh
+sh ./scripts/copy-provisioner-pat.sh
 """
 
 [tasks."infra:stop"]
@@ -60,7 +62,7 @@ sh ./scripts/compose.sh down --volumes --remove-orphans
 description = "Tail infrastructure logs"
 run = """
 . ./scripts/load-env.sh
-sh ./scripts/compose.sh logs -f postgres
+sh ./scripts/compose.sh logs -f
 """
 
 [tasks.migrate]
