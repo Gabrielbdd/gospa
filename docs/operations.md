@@ -32,6 +32,63 @@ conditions.
     mise run dev       # backend + frontend in parallel
     # Ctrl+C stops both
 
+### Design note — install completion is a page-lifetime boundary
+
+The moment `install_state` transitions to `ready` three things change
+at once:
+
+1. **Workspace row** now carries `zitadel_org_id`,
+   `zitadel_project_id`, `zitadel_spa_app_id`, `zitadel_spa_client_id`.
+2. **Auth gate** (server-side middleware) flips from pass-through to
+   JWT-validating via `OnReady → gate.Activate`. Protected RPCs now
+   require a Bearer token.
+3. **Public runtime config** served at `/_gofra/config.js` — which
+   the browser already has loaded as a snapshot from page boot — is
+   now *semantically* different: `auth.orgId` would return the new
+   org id if re-fetched. But the snapshot in `window.__GOFRA_CONFIG__`
+   is stale.
+
+The SPA handles this by triggering a **full page reload** (not SPA
+navigation) the instant `GetStatus` reports `READY`:
+
+```tsx
+// web/src/routes/install.tsx
+useEffect(() => {
+  if (statusQuery.data?.state === "INSTALL_STATE_READY") {
+    window.location.assign("/");
+  }
+}, [statusQuery.data?.state]);
+```
+
+`window.location.assign` re-executes every `<script>` tag, so the
+fresh `/_gofra/config.js` overwrites `window.__GOFRA_CONFIG__` with
+post-install values including `auth.orgId`. React remounts. Home page
+reads the live orgId. Login button is active.
+
+**Three defensive layers keep login working even if the reload path
+is bypassed:**
+
+1. The install wizard's `window.location.assign("/")` on READY — the
+   primary mechanism.
+2. The `/` route loader always calls `GetStatus` and carries
+   `zitadelOrgId` in loader data. The home page compares that against
+   `runtimeConfig.auth?.orgId`. If they disagree (stale snapshot),
+   the home page forces `window.location.reload()` to re-sync.
+3. `startLogin({ orgIdOverride })` accepts an explicit orgId so the
+   home page can pass the loader's live value directly to the OIDC
+   URL builder. Even if both reload paths fail (extensions, edge
+   cases), login still builds correctly.
+
+Backend side: every `GET /_gofra/config.js` re-runs the
+`publicconfig.Handler` mutator which re-reads the workspace row. The
+response is never cached at the framework level, so "reload to
+refresh" is authoritative. See `internal/publicconfig/resolver.go`
+and its tests.
+
+No SPA state is lost across the install-completion reload because the
+operator just completed a one-shot wizard; nothing worth preserving
+is in flight.
+
 ### Scenario A — Fresh clone, never run before
 
 Starting state: repo just cloned, no Docker volumes, no `.secrets/`.

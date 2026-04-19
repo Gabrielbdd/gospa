@@ -27,13 +27,20 @@ function randomVerifier(): string {
 /**
  * Builds the ZITADEL authorize URL and appends the
  * urn:zitadel:iam:org:id:<orgId> scope so the login consent is bound to
- * the MSP organisation. Pre-install (auth.orgId is empty) the function
- * throws — the `/` route should already have redirected the user to
- * `/install` before they could reach the login button.
+ * the MSP organisation.
+ *
+ * orgId source: an explicit override wins over
+ * window.__GOFRA_CONFIG__.auth.orgId. Callers that have a fresher
+ * orgId (e.g., from a loader that just called GetStatus) should pass
+ * it so login works even when /_gofra/config.js is a pre-install
+ * snapshot. Pre-install both are empty and the function throws.
  */
-export async function buildLoginURL(): Promise<{ url: string; state: string; codeVerifier: string }> {
+export async function buildLoginURL(opts?: {
+  orgIdOverride?: string;
+}): Promise<{ url: string; state: string; codeVerifier: string }> {
   const cfg = loadRuntimeConfig();
-  if (!cfg.auth.orgId) {
+  const orgId = opts?.orgIdOverride || cfg.auth.orgId;
+  if (!orgId) {
     throw new Error("cannot build login URL: workspace not installed yet");
   }
 
@@ -45,7 +52,7 @@ export async function buildLoginURL(): Promise<{ url: string; state: string; cod
   const scopes = [
     ...cfg.auth.scopes,
     "offline_access",
-    `urn:zitadel:iam:org:id:${cfg.auth.orgId}`,
+    `urn:zitadel:iam:org:id:${orgId}`,
   ];
 
   const params = new URLSearchParams({
@@ -66,12 +73,18 @@ export async function buildLoginURL(): Promise<{ url: string; state: string; cod
 }
 
 /**
- * Kicks off the OIDC login redirect. Stashes the PKCE verifier + state in
- * sessionStorage so the eventual /auth/callback route can complete the
- * code exchange. Callback handling is deferred to the next slice.
+ * Kicks off the OIDC login redirect. Stashes the PKCE verifier + state
+ * in sessionStorage so the eventual /auth/callback route can complete
+ * the code exchange. Callback handling is deferred to the next slice.
+ *
+ * Pass orgIdOverride when a caller has a fresher orgId than
+ * window.__GOFRA_CONFIG__ (e.g., a loader reading GetStatus on every
+ * navigation). This keeps login working even if the config script was
+ * loaded before install completed and has not yet been refreshed by
+ * a page reload.
  */
-export async function startLogin(): Promise<void> {
-  const { url, state, codeVerifier } = await buildLoginURL();
+export async function startLogin(opts?: { orgIdOverride?: string }): Promise<void> {
+  const { url, state, codeVerifier } = await buildLoginURL(opts);
   sessionStorage.setItem("oidc:state", state);
   sessionStorage.setItem("oidc:code_verifier", codeVerifier);
   window.location.assign(url);

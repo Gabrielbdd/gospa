@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { createRoute, redirect } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
 import { useEffect, useState } from "react";
 
@@ -34,8 +34,6 @@ const DEFAULT_TIMEZONE =
 
 function InstallPage() {
   const { initialState, initialError } = installRoute.useLoaderData();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   const alreadyProvisioning =
     initialState === "INSTALL_STATE_PROVISIONING";
@@ -55,12 +53,23 @@ function InstallPage() {
       : undefined,
   });
 
+  // Install completion is a page-lifetime boundary: the server just
+  // activated its JWT middleware and populated workspace.zitadel_org_id,
+  // but /_gofra/config.js was loaded at boot with an empty orgId. A
+  // full reload (not SPA navigation) forces the <script src=
+  // "/_gofra/config.js"> tag to re-execute, so window.__GOFRA_CONFIG__
+  // picks up the post-install values — including auth.orgId, which the
+  // login button needs to build the org-scoped ZITADEL authorize URL.
+  //
+  // Using window.location.assign instead of replace so the wizard
+  // stays in history — a deliberate back-button on the fresh home
+  // page returns the operator to /install, which the loader then
+  // redirects back to / (install_state is still READY). No stale state.
   useEffect(() => {
     if (statusQuery.data?.state === "INSTALL_STATE_READY") {
-      void queryClient.invalidateQueries({ queryKey: ["install-status"] });
-      void navigate({ to: "/" });
+      window.location.assign("/");
     }
-  }, [statusQuery.data?.state, navigate, queryClient]);
+  }, [statusQuery.data?.state]);
 
   const installMutation = useMutation({
     mutationFn: (req: InstallRequest) => install(req),
