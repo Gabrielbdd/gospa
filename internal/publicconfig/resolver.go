@@ -32,6 +32,7 @@ import (
 type WorkspaceAuth struct {
 	OrgID    string
 	ClientID string
+	Issuer   string
 }
 
 // WorkspaceAuthProvider returns the current MSP auth identifiers from
@@ -42,9 +43,9 @@ type WorkspaceAuthProvider interface {
 }
 
 // Handler returns an HTTP handler that serves the public config with
-// auth.org_id and auth.client_id populated from the provider.
-// Pre-install both fields are empty; the SPA treats that as "no
-// org-scoped login possible yet".
+// auth.org_id, auth.client_id, and auth.issuer populated from the
+// provider. Pre-install all three fields are empty; the SPA treats
+// that as "no org-scoped login possible yet".
 //
 // DB errors reading the workspace row are logged and swallowed — a
 // hiccup in the DB must not block /_gofra/config.js and cascade into
@@ -55,7 +56,12 @@ type WorkspaceAuthProvider interface {
 // (typically "gospa-web") that ZITADEL never registers under that
 // name. The wizard-time persisted `zitadel_spa_client_id` is the
 // real one — overriding it here is the only thing that makes the
-// browser's authorize URL match a real ZITADEL application.
+// browser's authorize URL match a real ZITADEL application. The
+// persisted `zitadel_issuer_url` follows the same pattern: ADR 0001
+// makes it explicit persisted state instead of static config, so
+// deploys that route the browser to a different ZITADEL host than
+// the cluster sees can override per workspace without touching the
+// app config.
 func Handler(cfg *config.Config, provider WorkspaceAuthProvider) http.Handler {
 	mutator := runtimeconfig.WithMutator(func(ctx context.Context, _ *http.Request, out *config.PublicConfig) error {
 		auth, err := provider.WorkspaceAuth(ctx)
@@ -68,6 +74,9 @@ func Handler(cfg *config.Config, provider WorkspaceAuthProvider) http.Handler {
 		out.Auth.OrgID = auth.OrgID
 		if auth.ClientID != "" {
 			out.Auth.ClientID = auth.ClientID
+		}
+		if auth.Issuer != "" {
+			out.Auth.Issuer = auth.Issuer
 		}
 		return nil
 	})

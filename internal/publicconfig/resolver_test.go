@@ -75,6 +75,22 @@ func TestHandler_InjectsClientIDFromWorkspace(t *testing.T) {
 	}
 }
 
+func TestHandler_InjectsIssuerFromWorkspace(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeProvider{auth: publicconfig.WorkspaceAuth{
+		OrgID:  "org-xyz-123",
+		Issuer: "https://zitadel.example.com",
+	}}
+	h := publicconfig.Handler(newConfig(), provider)
+
+	body := fetchJS(t, h)
+
+	if !strings.Contains(body, `"issuer":"https://zitadel.example.com"`) {
+		t.Errorf("emitted config.js did not override issuer with persisted value; body:\n%s", body)
+	}
+}
+
 func TestHandler_KeepsStaticClientIDWhenWorkspaceNotInstalled(t *testing.T) {
 	t.Parallel()
 
@@ -92,6 +108,23 @@ func TestHandler_KeepsStaticClientIDWhenWorkspaceNotInstalled(t *testing.T) {
 	}
 	if !strings.Contains(body, `"orgId":""`) {
 		t.Errorf("expected empty orgId pre-install; body:\n%s", body)
+	}
+}
+
+func TestHandler_KeepsStaticIssuerWhenWorkspaceNotInstalled(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeProvider{auth: publicconfig.WorkspaceAuth{}}
+	h := publicconfig.Handler(newConfig(), provider)
+
+	body := fetchJS(t, h)
+
+	// Pre-install the workspace has no persisted issuer, so the
+	// handler should leave the static placeholder in place. The SPA
+	// already disables the login button via empty orgId, so the
+	// (potentially wrong) issuer never reaches ZITADEL in this state.
+	if strings.Contains(body, `"issuer":""`) {
+		t.Errorf("static issuer was unexpectedly cleared; body:\n%s", body)
 	}
 }
 
@@ -127,10 +160,11 @@ func TestHandler_CallsProviderOnEveryRequest(t *testing.T) {
 
 	// Emulate a workspace that just transitioned from not-ready to
 	// ready between requests: the next request must see the new org
-	// AND the freshly-persisted client id.
+	// AND the freshly-persisted client id and issuer.
 	provider.auth = publicconfig.WorkspaceAuth{
 		OrgID:    "org-post-install",
 		ClientID: "post-install-client@gospa",
+		Issuer:   "https://zitadel-post-install.example.com",
 	}
 	body := fetchJS(t, h)
 	if !strings.Contains(body, `"orgId":"org-post-install"`) {
@@ -138,5 +172,8 @@ func TestHandler_CallsProviderOnEveryRequest(t *testing.T) {
 	}
 	if !strings.Contains(body, `"clientId":"post-install-client@gospa"`) {
 		t.Errorf("expected next-request to carry newly-populated clientId; body:\n%s", body)
+	}
+	if !strings.Contains(body, `"issuer":"https://zitadel-post-install.example.com"`) {
+		t.Errorf("expected next-request to carry newly-populated issuer; body:\n%s", body)
 	}
 }

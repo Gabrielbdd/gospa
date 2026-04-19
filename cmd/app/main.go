@@ -51,6 +51,9 @@ func (p workspaceAuthProvider) WorkspaceAuth(ctx context.Context) (publicconfig.
 	if ws.ZitadelSpaClientID.Valid {
 		out.ClientID = ws.ZitadelSpaClientID.String
 	}
+	if ws.ZitadelIssuerUrl.Valid {
+		out.Issuer = ws.ZitadelIssuerUrl.String
+	}
 	return out, nil
 }
 
