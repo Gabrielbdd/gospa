@@ -28,6 +28,7 @@ func NewFlagSet() *flag.FlagSet {
 	f.Bool("database.auto_migrate", false, "Run goose migrations on startup. Safe for dev; use a separate migration step in production")
 	f.String("auth.issuer", "", "ZITADEL issuer URL used for OIDC discovery and JWKS fetching")
 	f.String("auth.audience", "", "Expected audience claim in JWT access tokens (typically the ZITADEL")
+	f.String("zitadel.admin_api_url", "", "Base URL of the ZITADEL instance for the Management and v2 APIs")
 	return f
 }
 

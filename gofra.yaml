@@ -12,3 +12,12 @@ database:
 # auth:
 #   issuer: "http://localhost:8081"
 #   audience: "<ZITADEL project ID for API application>"
+
+# Zitadel provisioning. The defaults line up with the local docker-compose
+# setup (ZITADEL on :8081 + PAT at ./.secrets/zitadel-provisioner.pat). The
+# app refuses to start if provisioner_pat_file does not resolve to a non-
+# empty file — `mise run infra` materialises that file on first boot.
+# Override with GOSPA_ZITADEL_PROVISIONER_PAT_FILE for Kubernetes mounts.
+# zitadel:
+#   admin_api_url: "http://localhost:8081"
+#   provisioner_pat_file: ".secrets/zitadel-provisioner.pat"

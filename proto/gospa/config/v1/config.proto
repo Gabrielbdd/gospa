@@ -17,6 +17,24 @@ message Config {
 
   // Authentication configuration for JWT validation.
   AuthConfig auth = 4;
+
+  // ZITADEL provisioning configuration (bootstrap + admin API client).
+  ZitadelConfig zitadel = 5;
+}
+
+// ZitadelConfig holds connection settings for the ZITADEL admin client Gospa
+// uses to provision MSP orgs, companies, users, and applications. The app
+// refuses to start when provisioner_pat_file does not resolve to a non-empty
+// file at startup.
+message ZitadelConfig {
+  // Base URL of the ZITADEL instance for the Management and v2 APIs
+  // (e.g. "http://localhost:8081" locally).
+  string admin_api_url = 1 [(gofra.config.v1.field).default_value.string_value = "http://localhost:8081"];
+
+  // Path to the file holding the provisioner Personal Access Token.
+  // The env override GOSPA_ZITADEL_PROVISIONER_PAT_FILE takes precedence.
+  // Marked secret so koanf does not expose it via CLI flags.
+  string provisioner_pat_file = 2 [(gofra.config.v1.field).secret = true, (gofra.config.v1.field).default_value.string_value = ".secrets/zitadel-provisioner.pat"];
 }
 
 // AuthConfig holds server-side authentication settings for JWT validation.
