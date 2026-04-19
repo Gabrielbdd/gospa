@@ -22,16 +22,24 @@ not work around it by forking framework behavior inside Gospa.
 
 ## Stack
 
+Short list — full table with versions and roles is in
+[`docs/stack.md`](docs/stack.md).
+
 - **Framework**: Gofra (`github.com/Gabrielbdd/gofra`) — `runtime/config`,
   `runtime/health`, `runtime/serve`, `runtime/database`, `runtime/auth`,
-  `runtime/errors` packages imported directly.
+  `runtime/zitadel/secret`, `runtime/errors` packages imported directly.
 - **API**: Connect RPC + protobuf contracts under `proto/gospa/**`.
 - **Database**: PostgreSQL + `goose` migrations + `sqlc` generated queries.
-- **Frontend (planned)**: React + TanStack + shadcn/ui + Vite.
-- **Durable execution (planned)**: Restate.
-- **Auth (planned)**: Zitadel via OIDC.
-- **Local infra**: Docker/Podman Compose (Postgres today; Restate + Zitadel
-  as they land in the framework).
+- **Frontend**: React 19 + TanStack (Router/Query/Form) + shadcn/ui +
+  Tailwind v4 + Vite. OIDC login via `react-oidc-context`.
+- **Auth**: ZITADEL via OIDC. Per-workspace persisted contract
+  (issuer/management/audience) plus an operator-supplied install token
+  for the bootstrap wizard. JWT access tokens validated locally.
+- **Local infra**: Docker/Podman Compose runs Postgres + ZITADEL;
+  `mise run infra` materialises the provisioner PAT and the install
+  token under `.secrets/`.
+- **Durable execution (planned)**: Restate. Will replace the in-process
+  install orchestrator and close the kernel-kill mid-install gap.
 
 ## Build, Test, and Development Commands
 
