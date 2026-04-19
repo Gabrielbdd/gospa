@@ -12,6 +12,12 @@ set -eu
 # ZITADEL tries to write the PAT. Named volumes live inside the Docker
 # VM and do not inherit host-side UIDs.
 #
+# Detection strategy: ZITADEL ships a distroless image (no shell, no
+# test, no cat), so probing the file from inside the container is not
+# possible. Instead we try `compose cp` on every tick — it returns
+# non-zero when the source path does not yet exist, and writes the
+# file to the host when it does. Exit code does the work.
+#
 # Idempotent: exits early when the destination is already a non-empty
 # regular file.
 
@@ -34,23 +40,21 @@ mkdir -p "$(dirname -- "$dest")"
 
 i=1
 while [ "$i" -le "$attempts" ]; do
-  # `compose exec -T zitadel test -s <path>` checks the file exists and
-  # is non-empty inside the volume without needing a shell. ZITADEL's
-  # image is distroless-ish, so `test` is the most portable probe.
-  if sh ./scripts/compose.sh exec -T zitadel test -s "$container_path" >/dev/null 2>&1; then
-    # `compose cp <service>:<path> <local>` works for Docker Compose v2,
-    # Podman Compose (recent), and docker-compose 1.x.
-    if sh ./scripts/compose.sh cp "zitadel:$container_path" "$dest"; then
+  if sh ./scripts/compose.sh cp "zitadel:$container_path" "$dest" >/dev/null 2>&1; then
+    if [ -s "$dest" ]; then
       chmod 600 "$dest"
       printf 'provisioner PAT copied to %s\n' "$dest"
       exit 0
     fi
+    # cp returned 0 but left an empty file. Unexpected; drop and retry.
+    rm -f "$dest"
   fi
   sleep 1
   i=$((i + 1))
 done
 
-printf >&2 'timed out waiting for provisioner PAT at %s inside the zitadel_secrets volume after %s seconds\n' "$container_path" "$attempts"
+printf >&2 'timed out waiting for provisioner PAT inside the zitadel_secrets volume after %s seconds\n' "$attempts"
 printf >&2 'is ZITADEL healthy and configured with FirstInstance.Org.Machine + PatPath in infra/zitadel/steps.yaml?\n'
-printf >&2 'try: mise run infra:reset && mise run infra\n'
+printf >&2 'last ZITADEL logs:\n'
+sh ./scripts/compose.sh logs --tail=40 zitadel >&2 || true
 exit 1
