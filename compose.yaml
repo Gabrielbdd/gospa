@@ -41,10 +41,15 @@ services:
       - "${GOSPA_ZITADEL_PORT:-8081}:8080"
     volumes:
       - ./infra/zitadel/steps.yaml:/zitadel/steps.yaml:ro
-      - ./.secrets/zitadel-provisioner-raw:/zitadel-secrets
+      # Named volume (not a host bind-mount) so the ZITADEL container can
+      # write the provisioner PAT without the host UID/GID mismatch that
+      # bind-mounts produce on Docker Desktop. The host-side copy script
+      # pulls the file out with `compose cp`.
+      - zitadel_secrets:/zitadel-secrets
     depends_on:
       postgres:
         condition: service_healthy
 
 volumes:
   postgres_data:
+  zitadel_secrets:

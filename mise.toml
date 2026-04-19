@@ -76,10 +76,14 @@ sh ./scripts/compose.sh down --remove-orphans
 """
 
 [tasks."infra:reset"]
-description = "Stop infrastructure services and delete their data volumes"
+description = "Stop infrastructure services, delete data volumes, and wipe the materialised provisioner PAT"
 run = """
 . ./scripts/load-env.sh
 sh ./scripts/compose.sh down --volumes --remove-orphans
+rm -f .secrets/zitadel-provisioner.pat
+# The old bind-mount location from pre-fix checkouts. Safe to remove
+# repeatedly; does nothing when the directory is already gone.
+rm -rf .secrets/zitadel-provisioner-raw
 """
 
 [tasks."infra:logs"]
