@@ -19,6 +19,10 @@ import (
 
 	"github.com/Gabrielbdd/gospa/config"
 	"github.com/Gabrielbdd/gospa/db"
+	"github.com/Gabrielbdd/gospa/db/sqlc"
+	"github.com/Gabrielbdd/gospa/gen/gospa/install/v1/installv1connect"
+	"github.com/Gabrielbdd/gospa/internal/install"
+	"github.com/Gabrielbdd/gospa/internal/zitadel"
 	"github.com/Gabrielbdd/gospa/web"
 )
 
@@ -40,7 +44,8 @@ func main() {
 	// disk. In local dev `mise run infra` materialises the file; in
 	// Kubernetes the operator mounts a Secret at the configured path.
 
-	if _, err := loadProvisionerPAT(cfg); err != nil {
+	provisionerPAT, err := loadProvisionerPAT(cfg)
+	if err != nil {
 		slog.Error("zitadel provisioner PAT unavailable; refusing to start", "error", err)
 		os.Exit(1)
 	}
@@ -73,6 +78,23 @@ func main() {
 		}
 	}
 
+	// --- Zitadel admin client + install handler -----------------------------
+
+	zitadelClient := zitadel.NewHTTPClient(cfg.Zitadel.AdminAPIURL, provisionerPAT, nil)
+	queries := sqlc.New(pool)
+
+	installOrchestrator := &install.Orchestrator{
+		Queries: queries,
+		Zitadel: zitadelClient,
+		Logger:  slog.Default(),
+	}
+	installHandler := &install.Handler{
+		Queries:      queries,
+		Orchestrator: installOrchestrator,
+		Logger:       slog.Default(),
+		APIBaseURL:   cfg.Public.APIBaseURL,
+	}
+
 	// --- Auth ---------------------------------------------------------------
 	// Auth is opt-in: when issuer and audience are both configured, the
 	// middleware validates JWT access tokens on Connect RPC procedures.
@@ -89,8 +111,13 @@ func main() {
 		}
 
 		isPublic := runtimeauth.PublicProcedures(
-			// Add public RPC procedures here, e.g.:
-			// "/myapp.v1.PublicService/GetInfo",
+			// /install runs before any user exists, so its RPCs cannot
+			// require a valid token. Operators are responsible for
+			// keeping /install behind a private ingress until the
+			// workspace is ready (the SPA also shows a banner warning
+			// about this).
+			installv1connect.InstallServiceGetStatusProcedure,
+			installv1connect.InstallServiceInstallProcedure,
 		)
 
 		authMiddleware = runtimeauth.NewMiddleware(verifier, isPublic)
@@ -118,6 +145,14 @@ func main() {
 		app.Use(authMiddleware)
 	}
 	app.Handle(runtimeconfig.DefaultPath, config.PublicConfigHandler(cfg))
+
+	// Install service is mounted on the app router; auth middleware
+	// (when enabled) skips it because its procedures are registered
+	// public. Once workspace.install_state = ready, POST /install
+	// returns FailedPrecondition, so repeated clicks are safe.
+	installPath, installConnectHandler := installv1connect.NewInstallServiceHandler(installHandler)
+	app.Handle(installPath+"*", installConnectHandler)
+
 	app.Handle("/*", web.Handler())
 
 	root.Handle("/", app)

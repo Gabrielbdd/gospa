@@ -1,0 +1,127 @@
+// Package install owns the /install wizard backend: the Connect handler
+// surface for status + submission, and the orchestrator that provisions
+// the MSP workspace in ZITADEL on a submission.
+package install
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+
+	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/Gabrielbdd/gospa/db/sqlc"
+	"github.com/Gabrielbdd/gospa/internal/zitadel"
+)
+
+// Queries is the subset of sqlc's generated interface the orchestrator and
+// handler consume. Keeping it narrow here makes test doubles trivial.
+type Queries interface {
+	GetWorkspace(ctx context.Context) (sqlc.Workspace, error)
+	MarkWorkspaceProvisioning(ctx context.Context, arg sqlc.MarkWorkspaceProvisioningParams) error
+	MarkWorkspaceFailed(ctx context.Context, installError pgtype.Text) error
+	MarkWorkspaceReady(ctx context.Context) error
+	PersistZitadelIDs(ctx context.Context, arg sqlc.PersistZitadelIDsParams) error
+}
+
+// Input captures the workspace and initial-admin fields the wizard
+// collects. The orchestrator validates required fields and uses them to
+// drive the six-step pipeline below.
+type Input struct {
+	WorkspaceName string
+	WorkspaceSlug string
+	Timezone      string
+	CurrencyCode  string
+	AdminEmail    string
+	AdminFirst    string
+	AdminLast     string
+	// APIBaseURL is the browser-visible base URL the OIDC SPA should
+	// redirect back to; used to derive the OIDC app's RedirectURIs and
+	// post-logout URIs. Typically cfg.Public.ApiBaseUrl.
+	APIBaseURL string
+}
+
+// Orchestrator runs the install pipeline. Construct once at startup; call
+// Run in a goroutine after POST /install flips the workspace state to
+// provisioning.
+type Orchestrator struct {
+	Queries Queries
+	Zitadel zitadel.Client
+	Logger  *slog.Logger
+}
+
+// Run executes the six ordered steps, writing each outcome to the
+// workspace row. Any step failure flips install_state to failed with a
+// human-readable message. Callers do not need to handle the returned
+// error beyond logging — state is already persisted.
+func (o *Orchestrator) Run(ctx context.Context, in Input) error {
+	log := o.Logger
+	if log == nil {
+		log = slog.Default()
+	}
+
+	fail := func(step string, err error) error {
+		msg := fmt.Sprintf("%s: %s", step, err.Error())
+		log.ErrorContext(ctx, "install step failed", "step", step, "error", err)
+		if markErr := o.Queries.MarkWorkspaceFailed(ctx, pgtype.Text{String: msg, Valid: true}); markErr != nil {
+			log.ErrorContext(ctx, "failed to mark workspace failed", "error", markErr)
+		}
+		return fmt.Errorf("%s: %w", step, err)
+	}
+
+	// Step 1: create MSP org (and initial admin user in one shot).
+	log.InfoContext(ctx, "install step starting", "step", "create_org")
+	orgResp, err := o.Zitadel.SetUpOrg(ctx, zitadel.SetUpOrgRequest{
+		OrgName:   in.WorkspaceName,
+		UserEmail: in.AdminEmail,
+		FirstName: in.AdminFirst,
+		LastName:  in.AdminLast,
+	})
+	if err != nil {
+		return fail("create_org", err)
+	}
+
+	// Step 2 is implicit in SetUpOrg — the first human user is created
+	// together with the org. Kept as a visible log line so operators see
+	// the six-step flow in logs.
+	log.InfoContext(ctx, "install step complete", "step", "create_initial_user", "user_id", orgResp.UserID)
+
+	// Step 3: create project inside the MSP org.
+	log.InfoContext(ctx, "install step starting", "step", "create_project")
+	projectID, err := o.Zitadel.AddProject(ctx, orgResp.OrgID, "Gospa")
+	if err != nil {
+		return fail("create_project", err)
+	}
+
+	// Step 4: create OIDC SPA application inside the project.
+	log.InfoContext(ctx, "install step starting", "step", "create_oidc_app")
+	appResp, err := o.Zitadel.AddOIDCApp(ctx, orgResp.OrgID, projectID, zitadel.AddOIDCAppRequest{
+		Name:           "Gospa Web",
+		RedirectURIs:   []string{in.APIBaseURL + "/auth/callback"},
+		PostLogoutURIs: []string{in.APIBaseURL + "/"},
+		DevMode:        true,
+	})
+	if err != nil {
+		return fail("create_oidc_app", err)
+	}
+
+	// Step 5: persist the four identifiers on the singleton row.
+	log.InfoContext(ctx, "install step starting", "step", "persist_ids")
+	if err := o.Queries.PersistZitadelIDs(ctx, sqlc.PersistZitadelIDsParams{
+		ZitadelOrgID:        pgtype.Text{String: orgResp.OrgID, Valid: true},
+		ZitadelProjectID:    pgtype.Text{String: projectID, Valid: true},
+		ZitadelSpaAppID:     pgtype.Text{String: appResp.AppID, Valid: true},
+		ZitadelSpaClientID:  pgtype.Text{String: appResp.ClientID, Valid: true},
+	}); err != nil {
+		return fail("persist_ids", err)
+	}
+
+	// Step 6: flip the workspace row to ready.
+	log.InfoContext(ctx, "install step starting", "step", "mark_ready")
+	if err := o.Queries.MarkWorkspaceReady(ctx); err != nil {
+		return fail("mark_ready", err)
+	}
+
+	log.InfoContext(ctx, "install complete", "org_id", orgResp.OrgID, "project_id", projectID, "app_id", appResp.AppID)
+	return nil
+}
