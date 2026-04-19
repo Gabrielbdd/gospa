@@ -88,19 +88,25 @@ func OrgScope(orgID string) string {
 }
 
 // AudienceScope returns the OIDC scope string that asks ZITADEL to
-// include the given project ID in the access token's `aud` claim,
-// e.g. urn:zitadel:iam:org:project:id:NNN:aud. Without this scope the
-// JWT verifier would reject the token because cfg.Auth.Audience
-// (= project id) would not appear in `aud`. Returns an empty string
-// when projectID is empty.
+// include the given audience value in the access token's `aud` claim,
+// e.g. urn:zitadel:iam:org:project:id:NNN:aud. Returns an empty string
+// when audience is empty.
 //
-// The api_audience_scope intentionally is not persisted in this v1
-// round (decision in the provisioning hardening plan); it lives here
-// as a deterministic derivation from the persisted project_id so the
-// browser can request it without learning the URN format.
-func AudienceScope(projectID string) string {
-	if projectID == "" {
+// Callers should pass workspace.zitadel_api_audience — the same field
+// the JWT verifier validates against. Anchoring the scope on the
+// audience contract (not on project_id directly) guarantees the
+// browser asks for exactly what the gate will accept, even if a
+// future deploy persists an api_audience that differs from the
+// project_id (cfg.Auth.Audience overrides during repair).
+//
+// The api_audience_scope intentionally is not a persisted column in
+// this v1 round (decision in the provisioning hardening plan); it
+// lives here as a deterministic derivation from the persisted
+// audience so the browser can request it without learning the URN
+// format.
+func AudienceScope(audience string) string {
+	if audience == "" {
 		return ""
 	}
-	return "urn:zitadel:iam:org:project:id:" + projectID + ":aud"
+	return "urn:zitadel:iam:org:project:id:" + audience + ":aud"
 }

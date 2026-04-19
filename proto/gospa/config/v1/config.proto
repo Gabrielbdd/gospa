@@ -104,8 +104,11 @@ message PublicAuthConfig {
   // OIDC browser client ID.
   string client_id = 2 [(gofra.config.v1.field).default_value.string_value = "gospa-web"];
 
-  // OIDC scopes requested during login.
-  repeated string scopes = 3 [(gofra.config.v1.field).default_value.string_list = {values: ["openid", "profile", "email"]}];
+  // OIDC scopes requested during login. offline_access is included by
+  // default so react-oidc-context's automaticSilentRenew has a refresh
+  // token to use; without it silent renewal would fail and the user
+  // would be bounced to the login screen mid-session.
+  repeated string scopes = 3 [(gofra.config.v1.field).default_value.string_list = {values: ["openid", "profile", "email", "offline_access"]}];
 
   // Auth callback path.
   string redirect_path = 4 [(gofra.config.v1.field).default_value.string_value = "/auth/callback"];

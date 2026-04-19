@@ -41,7 +41,7 @@ type PublicAuthConfig struct {
 	Issuer string `koanf:"issuer" yaml:"issuer" json:"issuer"`
 	// OIDC browser client ID.
 	ClientID string `koanf:"client_id" yaml:"client_id" json:"clientId"`
-	// OIDC scopes requested during login.
+	// OIDC scopes requested during login. offline_access is included by.
 	Scopes []string `koanf:"scopes" yaml:"scopes" json:"scopes"`
 	// Auth callback path.
 	RedirectPath string `koanf:"redirect_path" yaml:"redirect_path" json:"redirectPath"`
@@ -96,7 +96,7 @@ func DefaultConfig() *Config {
 			Auth: PublicAuthConfig{
 				Issuer:                 "http://localhost:8081",
 				ClientID:               "gospa-web",
-				Scopes:                 []string{"openid", "profile", "email"},
+				Scopes:                 []string{"openid", "profile", "email", "offline_access"},
 				RedirectPath:           "/auth/callback",
 				PostLogoutRedirectPath: "/",
 			},

@@ -56,8 +56,16 @@ func (p workspaceAuthProvider) WorkspaceAuth(ctx context.Context) (publicconfig.
 	if ws.ZitadelIssuerUrl.Valid {
 		out.Issuer = ws.ZitadelIssuerUrl.String
 	}
-	if ws.ZitadelProjectID.Valid {
-		out.AudienceScope = zitadelcontract.AudienceScope(ws.ZitadelProjectID.String)
+	// AudienceScope is derived from the same field the auth gate
+	// validates (workspace.zitadel_api_audience), not from
+	// workspace.zitadel_project_id. Today the two are equal because
+	// DeriveFresh sets api_audience = project_id, but the contract
+	// allows them to diverge (cfg.Auth.Audience can override during
+	// repair). Anchoring the browser scope on api_audience guarantees
+	// the JWT's aud claim matches what the gate expects, no matter
+	// which derivation rule produced the persisted value.
+	if ws.ZitadelApiAudience.Valid {
+		out.AudienceScope = zitadelcontract.AudienceScope(ws.ZitadelApiAudience.String)
 	}
 	return out, nil
 }

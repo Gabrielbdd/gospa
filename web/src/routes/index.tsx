@@ -1,8 +1,10 @@
+import { useQuery } from "@tanstack/react-query";
 import { createRoute, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "react-oidc-context";
 
 import { Button } from "@/components/ui/button";
+import { listCompanies } from "@/lib/companies-client";
 import { getStatus } from "@/lib/install-client";
 import { runtimeConfig } from "@/lib/runtime-config";
 import { rootRoute } from "@/routes/__root";
@@ -24,6 +26,19 @@ function HomePage() {
   const { zitadelOrgId } = indexRoute.useLoaderData();
   const configOrgId = runtimeConfig.auth?.orgId ?? "";
   const auth = useAuth();
+  const accessToken = auth.user?.access_token;
+
+  // Companies probe: a single ListCompanies call that proves the
+  // end-to-end auth contract works (token type, audience, issuer,
+  // gate, JWT verifier all aligned). Only enabled when authenticated;
+  // a 401 here means the bearer is missing or rejected, which is the
+  // cheapest signal to surface the failure during S9 manual e2e.
+  const companies = useQuery({
+    queryKey: ["companies", accessToken],
+    queryFn: () => listCompanies(accessToken!),
+    enabled: auth.isAuthenticated && !!accessToken,
+    retry: false,
+  });
 
   // Authoritative source: GetStatus, which the loader just called.
   // Runtime config (from /_gofra/config.js) is a page-load snapshot
@@ -111,6 +126,27 @@ function HomePage() {
       )}
       {auth.error && (
         <p className="text-xs text-destructive">{auth.error.message}</p>
+      )}
+      {auth.isAuthenticated && (
+        <section className="rounded-md border border-border bg-card p-4">
+          <h2 className="text-sm font-semibold">Companies probe</h2>
+          {companies.isLoading && (
+            <p className="text-xs text-muted-foreground">
+              Fetching ListCompanies with the bearer token…
+            </p>
+          )}
+          {companies.error && (
+            <p className="text-xs text-destructive">
+              Authenticated RPC failed: {(companies.error as Error).message}
+            </p>
+          )}
+          {companies.data && (
+            <p className="text-xs text-muted-foreground">
+              Authenticated RPC OK — {companies.data.companies?.length ?? 0}{" "}
+              company/companies returned.
+            </p>
+          )}
+        </section>
       )}
     </main>
   );
