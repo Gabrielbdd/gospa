@@ -20,7 +20,9 @@ import (
 	"github.com/Gabrielbdd/gospa/config"
 	"github.com/Gabrielbdd/gospa/db"
 	"github.com/Gabrielbdd/gospa/db/sqlc"
+	"github.com/Gabrielbdd/gospa/gen/gospa/companies/v1/companiesv1connect"
 	"github.com/Gabrielbdd/gospa/gen/gospa/install/v1/installv1connect"
+	"github.com/Gabrielbdd/gospa/internal/companies"
 	"github.com/Gabrielbdd/gospa/internal/install"
 	"github.com/Gabrielbdd/gospa/internal/zitadel"
 	"github.com/Gabrielbdd/gospa/web"
@@ -94,6 +96,11 @@ func main() {
 		Logger:       slog.Default(),
 		APIBaseURL:   cfg.Public.APIBaseURL,
 	}
+	companiesHandler := &companies.Handler{
+		Queries: queries,
+		Zitadel: zitadelClient,
+		Logger:  slog.Default(),
+	}
 
 	// --- Auth ---------------------------------------------------------------
 	// Auth is opt-in: when issuer and audience are both configured, the
@@ -152,6 +159,12 @@ func main() {
 	// returns FailedPrecondition, so repeated clicks are safe.
 	installPath, installConnectHandler := installv1connect.NewInstallServiceHandler(installHandler)
 	app.Handle(installPath+"*", installConnectHandler)
+
+	// Companies service is always protected: each handler method checks
+	// workspace.install_state = ready and returns FailedPrecondition
+	// pointing users at /install when the workspace is not yet set up.
+	companiesPath, companiesConnectHandler := companiesv1connect.NewCompaniesServiceHandler(companiesHandler)
+	app.Handle(companiesPath+"*", companiesConnectHandler)
 
 	app.Handle("/*", web.Handler())
 
