@@ -73,6 +73,24 @@ func TestDeriveRepair_FallsBackToProjectIDWhenAudienceEmpty(t *testing.T) {
 	}
 }
 
+func TestOrgScope(t *testing.T) {
+	if got := zitadelcontract.OrgScope("org-42"); got != "urn:zitadel:iam:org:id:org-42" {
+		t.Errorf("OrgScope(org-42) = %q; want urn:zitadel:iam:org:id:org-42", got)
+	}
+	if got := zitadelcontract.OrgScope(""); got != "" {
+		t.Errorf("OrgScope(empty) = %q; want empty", got)
+	}
+}
+
+func TestAudienceScope(t *testing.T) {
+	if got := zitadelcontract.AudienceScope("project-42"); got != "urn:zitadel:iam:org:project:id:project-42:aud" {
+		t.Errorf("AudienceScope(project-42) = %q; want urn:zitadel:iam:org:project:id:project-42:aud", got)
+	}
+	if got := zitadelcontract.AudienceScope(""); got != "" {
+		t.Errorf("AudienceScope(empty) = %q; want empty", got)
+	}
+}
+
 func TestDeriveRepair_LeavesAudienceEmptyWhenNoSafeSource(t *testing.T) {
 	cfg := &config.Config{
 		Zitadel: config.ZitadelConfig{AdminAPIURL: "https://admin.example.com"},

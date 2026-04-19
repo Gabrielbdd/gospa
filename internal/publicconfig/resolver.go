@@ -26,13 +26,24 @@ import (
 )
 
 // WorkspaceAuth is the auth-relevant subset of the workspace row the
-// browser config depends on. Empty strings are valid (pre-install or
-// when the workspace was wiped) and result in the SPA showing
-// "login disabled" rather than rendering a broken authorize URL.
+// browser config depends on. Empty strings are valid: pre-install
+// orgID + clientID + issuer + the two scope strings come back empty;
+// the SPA already disables the login button when orgID is empty so a
+// half-populated config never reaches ZITADEL. The publicconfig
+// mutator preserves the static placeholders for clientID and issuer
+// in that pre-install state.
 type WorkspaceAuth struct {
 	OrgID    string
 	ClientID string
 	Issuer   string
+	// OrgScope and AudienceScope are derived server-side from the
+	// persisted org and project IDs (see zitadelcontract.OrgScope /
+	// AudienceScope). Empty when not derivable. The mutator appends
+	// them to PublicAuthConfig.Scopes so the browser can pass them
+	// through react-oidc-context without learning the ZITADEL URN
+	// format.
+	OrgScope      string
+	AudienceScope string
 }
 
 // WorkspaceAuthProvider returns the current MSP auth identifiers from
@@ -77,6 +88,12 @@ func Handler(cfg *config.Config, provider WorkspaceAuthProvider) http.Handler {
 		}
 		if auth.Issuer != "" {
 			out.Auth.Issuer = auth.Issuer
+		}
+		if auth.OrgScope != "" {
+			out.Auth.Scopes = append(out.Auth.Scopes, auth.OrgScope)
+		}
+		if auth.AudienceScope != "" {
+			out.Auth.Scopes = append(out.Auth.Scopes, auth.AudienceScope)
 		}
 		return nil
 	})

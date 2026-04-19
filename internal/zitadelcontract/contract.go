@@ -74,3 +74,33 @@ func issuerOrFallback(cfg *config.Config) string {
 	}
 	return cfg.Zitadel.AdminAPIURL
 }
+
+// OrgScope returns the OIDC scope string that scopes a ZITADEL login
+// to a specific organisation, e.g. urn:zitadel:iam:org:id:NNN. Returns
+// an empty string when orgID is empty so the caller can decide not to
+// inject anything pre-install. Kept as a server-side helper so the
+// browser does not have to know how to compose ZITADEL scope URNs.
+func OrgScope(orgID string) string {
+	if orgID == "" {
+		return ""
+	}
+	return "urn:zitadel:iam:org:id:" + orgID
+}
+
+// AudienceScope returns the OIDC scope string that asks ZITADEL to
+// include the given project ID in the access token's `aud` claim,
+// e.g. urn:zitadel:iam:org:project:id:NNN:aud. Without this scope the
+// JWT verifier would reject the token because cfg.Auth.Audience
+// (= project id) would not appear in `aud`. Returns an empty string
+// when projectID is empty.
+//
+// The api_audience_scope intentionally is not persisted in this v1
+// round (decision in the provisioning hardening plan); it lives here
+// as a deterministic derivation from the persisted project_id so the
+// browser can request it without learning the URN format.
+func AudienceScope(projectID string) string {
+	if projectID == "" {
+		return ""
+	}
+	return "urn:zitadel:iam:org:project:id:" + projectID + ":aud"
+}

@@ -48,12 +48,16 @@ func (p workspaceAuthProvider) WorkspaceAuth(ctx context.Context) (publicconfig.
 	out := publicconfig.WorkspaceAuth{}
 	if ws.ZitadelOrgID.Valid {
 		out.OrgID = ws.ZitadelOrgID.String
+		out.OrgScope = zitadelcontract.OrgScope(ws.ZitadelOrgID.String)
 	}
 	if ws.ZitadelSpaClientID.Valid {
 		out.ClientID = ws.ZitadelSpaClientID.String
 	}
 	if ws.ZitadelIssuerUrl.Valid {
 		out.Issuer = ws.ZitadelIssuerUrl.String
+	}
+	if ws.ZitadelProjectID.Valid {
+		out.AudienceScope = zitadelcontract.AudienceScope(ws.ZitadelProjectID.String)
 	}
 	return out, nil
 }

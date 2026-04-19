@@ -3,7 +3,9 @@ import { createRoot } from "react-dom/client";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+import { GospaAuthProvider } from "@/lib/auth-provider";
 import { rootRoute } from "@/routes/__root";
+import { authCallbackRoute } from "@/routes/auth-callback";
 import { indexRoute } from "@/routes/index";
 import { installRoute } from "@/routes/install";
 import "@/styles.css";
@@ -12,7 +14,11 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1 } },
 });
 
-const routeTree = rootRoute.addChildren([indexRoute, installRoute]);
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  installRoute,
+  authCallbackRoute,
+]);
 
 const router = createRouter({
   routeTree,
@@ -34,7 +40,9 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
+      <GospaAuthProvider>
+        <RouterProvider router={router} />
+      </GospaAuthProvider>
     </QueryClientProvider>
   </StrictMode>,
 );

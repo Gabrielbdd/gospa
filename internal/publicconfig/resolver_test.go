@@ -111,6 +111,45 @@ func TestHandler_KeepsStaticClientIDWhenWorkspaceNotInstalled(t *testing.T) {
 	}
 }
 
+func TestHandler_AppendsOrgAndAudienceScopesWhenDerived(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeProvider{auth: publicconfig.WorkspaceAuth{
+		OrgID:         "org-42",
+		OrgScope:      "urn:zitadel:iam:org:id:org-42",
+		AudienceScope: "urn:zitadel:iam:org:project:id:project-7:aud",
+	}}
+	h := publicconfig.Handler(newConfig(), provider)
+
+	body := fetchJS(t, h)
+
+	if !strings.Contains(body, "urn:zitadel:iam:org:id:org-42") {
+		t.Errorf("emitted config.js missing org scope; body:\n%s", body)
+	}
+	if !strings.Contains(body, "urn:zitadel:iam:org:project:id:project-7:aud") {
+		t.Errorf("emitted config.js missing audience scope; body:\n%s", body)
+	}
+}
+
+func TestHandler_LeavesScopesUntouchedWhenWorkspaceNotInstalled(t *testing.T) {
+	t.Parallel()
+
+	provider := &fakeProvider{auth: publicconfig.WorkspaceAuth{}}
+	h := publicconfig.Handler(newConfig(), provider)
+
+	body := fetchJS(t, h)
+
+	// Pre-install: no derived scopes appended; the static defaults
+	// (openid/profile/email) stay alone. The SPA disables login via
+	// empty orgId so the partial scope set never reaches ZITADEL.
+	if strings.Contains(body, "urn:zitadel:iam:org:id:") {
+		t.Errorf("org scope unexpectedly emitted pre-install; body:\n%s", body)
+	}
+	if strings.Contains(body, "urn:zitadel:iam:org:project:id:") {
+		t.Errorf("audience scope unexpectedly emitted pre-install; body:\n%s", body)
+	}
+}
+
 func TestHandler_KeepsStaticIssuerWhenWorkspaceNotInstalled(t *testing.T) {
 	t.Parallel()
 
