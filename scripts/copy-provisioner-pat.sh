@@ -18,8 +18,11 @@ set -eu
 # non-zero when the source path does not yet exist, and writes the
 # file to the host when it does. Exit code does the work.
 #
-# Idempotent: exits early when the destination is already a non-empty
-# regular file.
+# NOT idempotent across ZITADEL resets: always re-copies the PAT from
+# the volume so a stale host-side file (e.g., from a prior ZITADEL
+# instance wiped by `mise run infra:reset`) cannot survive into the
+# next boot and cause a 401 when the app tries to use it. `compose cp`
+# is cheap even when the content is unchanged.
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 project_dir=$(CDPATH= cd -- "$script_dir/.." && pwd)
@@ -30,11 +33,6 @@ cd "$project_dir"
 dest="${GOSPA_ZITADEL_PROVISIONER_PAT_FILE}"
 container_path="/zitadel-secrets/zitadel-provisioner.pat"
 attempts="${1:-120}"
-
-if [ -s "$dest" ]; then
-  printf 'provisioner PAT already present at %s\n' "$dest"
-  exit 0
-fi
 
 mkdir -p "$(dirname -- "$dest")"
 

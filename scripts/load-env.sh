@@ -22,10 +22,10 @@ fi
 : "${GOSPA_ZITADEL_EXTERNAL_DOMAIN:=localhost}"
 : "${GOSPA_ZITADEL_MASTERKEY:=MasterkeyNeedsToHave32Characters}"
 
-script_dir_loadenv=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-project_dir_loadenv=$(CDPATH= cd -- "$script_dir_loadenv/.." && pwd)
-
-: "${GOSPA_ZITADEL_PROVISIONER_PAT_FILE:=${project_dir_loadenv}/.secrets/zitadel-provisioner.pat}"
+# Use $PWD — not $0 — because this script is sourced (not executed) and
+# $0 in a sourced script is the calling shell, not the script path.
+# Mise tasks always run from the project root, so $PWD is the right anchor.
+: "${GOSPA_ZITADEL_PROVISIONER_PAT_FILE:=$PWD/.secrets/zitadel-provisioner.pat}"
 
 default_database_url="postgres://${GOFRA_DB_USER}:${GOFRA_DB_PASSWORD}@${GOFRA_DB_HOST}:${GOFRA_DB_PORT}/${GOFRA_DB_NAME}?sslmode=${GOFRA_DB_SSLMODE}"
 : "${DATABASE_URL:=$default_database_url}"
