@@ -206,7 +206,7 @@ Starting state: you were at `/install`, hit submit, and killed
 
 - The install wizard accepts the workspace again and lets you submit.
 
-**Cleanup behavior** (S15 / commit `<S15-hash>`):
+**Cleanup behavior** (S15 / commit `6a9ecae`):
 
 - **Orchestrator failure inside `Run`** (e.g. `AddProject`, `AddOIDCApp`,
   or `PersistZitadelIDs` returns an error after `SetUpOrg` succeeded):
