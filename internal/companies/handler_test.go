@@ -66,6 +66,9 @@ func (z *fakeZitadel) AddProject(ctx context.Context, _, _ string) (string, erro
 func (z *fakeZitadel) AddOIDCApp(ctx context.Context, _, _ string, _ zitadel.AddOIDCAppRequest) (zitadel.AddOIDCAppResponse, error) {
 	return zitadel.AddOIDCAppResponse{}, nil
 }
+func (z *fakeZitadel) RemoveOrg(ctx context.Context, _ string) error {
+	return nil
+}
 
 func readyWorkspace() sqlc.Workspace {
 	return sqlc.Workspace{InstallState: sqlc.WorkspaceInstallStateReady}

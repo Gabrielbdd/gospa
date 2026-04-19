@@ -85,6 +85,71 @@ func TestHTTPClient_AddProject_SetsOrgHeader(t *testing.T) {
 	}
 }
 
+func TestHTTPClient_RemoveOrg_Success(t *testing.T) {
+	var (
+		gotMethod, gotPath, gotAuth string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotMethod = r.Method
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := zitadel.NewHTTPClient(srv.URL, staticPAT("pat-rm"), srv.Client())
+	if err := c.RemoveOrg(context.Background(), "org-42"); err != nil {
+		t.Fatalf("RemoveOrg: %v", err)
+	}
+	if gotMethod != http.MethodDelete {
+		t.Errorf("method = %q; want DELETE", gotMethod)
+	}
+	if gotPath != "/admin/v1/orgs/org-42" {
+		t.Errorf("path = %q", gotPath)
+	}
+	if gotAuth != "Bearer pat-rm" {
+		t.Errorf("Authorization = %q", gotAuth)
+	}
+}
+
+func TestHTTPClient_RemoveOrg_NotFoundIsIdempotent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"message":"not found"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := zitadel.NewHTTPClient(srv.URL, staticPAT("pat"), srv.Client())
+	if err := c.RemoveOrg(context.Background(), "org-gone"); err != nil {
+		t.Errorf("RemoveOrg(404) = %v; want nil — already-gone is success", err)
+	}
+}
+
+func TestHTTPClient_RemoveOrg_PropagatesServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"message":"db down"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := zitadel.NewHTTPClient(srv.URL, staticPAT("pat"), srv.Client())
+	err := c.RemoveOrg(context.Background(), "org-x")
+	if err == nil {
+		t.Fatal("expected error on 500")
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("error = %v; want it to mention 500", err)
+	}
+}
+
+func TestHTTPClient_RemoveOrg_RejectsEmptyID(t *testing.T) {
+	c := zitadel.NewHTTPClient("http://unused", staticPAT("pat"), nil)
+	err := c.RemoveOrg(context.Background(), "")
+	if err == nil {
+		t.Fatal("expected error on empty org id")
+	}
+}
+
 func TestHTTPClient_ReturnsErrorOn4xx(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)

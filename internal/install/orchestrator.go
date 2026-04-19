@@ -70,14 +70,45 @@ type Orchestrator struct {
 // workspace row. Any step failure flips install_state to failed with a
 // human-readable message. Callers do not need to handle the returned
 // error beyond logging — state is already persisted.
+//
+// When a step after SetUpOrg fails, the orchestrator opportunistically
+// asks ZITADEL to remove the org it just created (cascade-deletes the
+// project + OIDC app). This keeps the next install attempt from
+// stacking new orgs alongside orphans. The cleanup is best-effort —
+// if RemoveOrg itself fails (ZITADEL down, network), the original
+// failure and the cleanup failure are both recorded in install_error
+// and the operator is alerted via logs. No retry; saga is out of
+// scope.
+//
+// SetUpOrg failures intentionally do not trigger cleanup: ZITADEL may
+// have created the org partially (without returning an id), and we
+// have no handle to delete what we cannot identify. Operator cleanup
+// stays the contract for that case.
 func (o *Orchestrator) Run(ctx context.Context, in Input) error {
 	log := o.Logger
 	if log == nil {
 		log = slog.Default()
 	}
 
+	var createdOrgID string
+
 	fail := func(step string, err error) error {
 		msg := fmt.Sprintf("%s: %s", step, err.Error())
+		if createdOrgID != "" {
+			if rmErr := o.Zitadel.RemoveOrg(context.Background(), createdOrgID); rmErr != nil {
+				msg += " | cleanup failed: " + rmErr.Error()
+				log.ErrorContext(ctx, "install cleanup failed; org left orphaned in ZITADEL",
+					"org_id", createdOrgID,
+					"step", step,
+					"error", rmErr,
+				)
+			} else {
+				log.InfoContext(ctx, "install rolled back created org",
+					"org_id", createdOrgID,
+					"step", step,
+				)
+			}
+		}
 		log.ErrorContext(ctx, "install step failed", "step", step, "error", err)
 		if markErr := o.Queries.MarkWorkspaceFailed(ctx, pgtype.Text{String: msg, Valid: true}); markErr != nil {
 			log.ErrorContext(ctx, "failed to mark workspace failed", "error", markErr)
@@ -97,6 +128,9 @@ func (o *Orchestrator) Run(ctx context.Context, in Input) error {
 	if err != nil {
 		return fail("create_org", err)
 	}
+	// From here on, any step failure must compensate by deleting the
+	// org we just created (ZITADEL cascades to project + OIDC app).
+	createdOrgID = orgResp.OrgID
 
 	// Step 2 is implicit in SetUpOrg — the first human user is created
 	// together with the org. Kept as a visible log line so operators see

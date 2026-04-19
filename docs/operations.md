@@ -206,10 +206,31 @@ Starting state: you were at `/install`, hit submit, and killed
 
 - The install wizard accepts the workspace again and lets you submit.
 
-**Caveat:** if the previous attempt had already called `AddOrganization`
-in ZITADEL, that org is orphaned in ZITADEL — the retry creates a new
-one. Clean up manually in the ZITADEL console if it matters. This is
-documented as an MVP debt; a Restate saga would eliminate it.
+**Cleanup behavior** (S15 / commit `<S15-hash>`):
+
+- **Orchestrator failure inside `Run`** (e.g. `AddProject`, `AddOIDCApp`,
+  or `PersistZitadelIDs` returns an error after `SetUpOrg` succeeded):
+  the orchestrator's `fail` helper calls `RemoveOrg` on the org it just
+  created. ZITADEL cascades the delete to the project and OIDC app, so
+  there is **no orphan**. The retry creates a fresh org with a fresh
+  id; nothing left behind.
+
+  If `RemoveOrg` itself fails (ZITADEL down, network), the failure is
+  appended to `install_error` (`"<step>: <err> | cleanup failed: <rmErr>"`)
+  and logged as `install cleanup failed; org left orphaned in ZITADEL`.
+  The operator is alerted and can clean up manually.
+
+- **Process crashed before `Run` could fail** (kernel-kill, SIGKILL,
+  hard pod eviction, container OOM): the orchestrator never reaches
+  the `fail` path, so no compensation runs. The org remains orphaned
+  in ZITADEL until the operator removes it manually. This is the
+  remaining unresolved case — it would require persisting the
+  in-flight org id before the ZITADEL call (so a fresh process can
+  see and clean it) or moving install to Restate.
+
+- **`SetUpOrg` itself failed**: the orchestrator never had an org id
+  to compensate against. ZITADEL may or may not have created the org
+  partially. Operator cleanup applies.
 
 ### Scenario F — PAT rotated manually in the ZITADEL console
 

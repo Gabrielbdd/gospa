@@ -27,6 +27,11 @@ type Client interface {
 	AddProject(ctx context.Context, orgID, name string) (string, error)
 	AddOIDCApp(ctx context.Context, orgID, projectID string, req AddOIDCAppRequest) (AddOIDCAppResponse, error)
 	AddOrganization(ctx context.Context, name string) (string, error)
+	// RemoveOrg deletes an organisation (cascades to its projects + apps).
+	// Used by the install orchestrator's opportunistic cleanup when a
+	// post-SetUpOrg step fails. Idempotent: a 404 from ZITADEL is
+	// treated as success so retries are safe.
+	RemoveOrg(ctx context.Context, orgID string) error
 }
 
 // SetUpOrgRequest is the input for the Admin SetUpOrg call, which creates
@@ -167,6 +172,43 @@ func (c *HTTPClient) AddOrganization(ctx context.Context, name string) (string, 
 		return "", fmt.Errorf("zitadel AddOrganization: %w", err)
 	}
 	return out.ID, nil
+}
+
+// RemoveOrg deletes an organisation. ZITADEL cascades the delete to the
+// org's projects and OIDC apps, so callers compensating for a partial
+// install only need to remove the org.
+//
+// 404 is treated as success — the org is already gone, which is exactly
+// what the caller wanted. Other 4xx/5xx are propagated so the caller can
+// record the failure in install_error and let the operator investigate.
+func (c *HTTPClient) RemoveOrg(ctx context.Context, orgID string) error {
+	if orgID == "" {
+		return fmt.Errorf("zitadel RemoveOrg: empty org id")
+	}
+	pat := c.patProvider()
+	if pat == "" {
+		return fmt.Errorf("zitadel RemoveOrg: provisioner PAT not available")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/admin/v1/orgs/"+orgID, nil)
+	if err != nil {
+		return fmt.Errorf("zitadel RemoveOrg: build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+pat)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("zitadel RemoveOrg: do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("zitadel RemoveOrg: %s: %s", resp.Status, string(body))
+	}
+	return nil
 }
 
 // --- Management API (needs x-zitadel-orgid) ----------------------------

@@ -90,12 +90,14 @@ type fakeZitadel struct {
 	addProjectErr  error
 	addOIDCResp    zitadel.AddOIDCAppResponse
 	addOIDCErr     error
+	removeOrgErr   error
 
-	setUpOrgReq   zitadel.SetUpOrgRequest
-	addProjectOrg string
-	addOIDCOrg    string
-	addOIDCProj   string
-	addOIDCReq    zitadel.AddOIDCAppRequest
+	setUpOrgReq    zitadel.SetUpOrgRequest
+	addProjectOrg  string
+	addOIDCOrg     string
+	addOIDCProj    string
+	addOIDCReq     zitadel.AddOIDCAppRequest
+	removeOrgCalls []string // org ids passed to RemoveOrg, in order
 }
 
 func (z *fakeZitadel) SetUpOrg(ctx context.Context, req zitadel.SetUpOrgRequest) (zitadel.SetUpOrgResponse, error) {
@@ -114,6 +116,10 @@ func (z *fakeZitadel) AddOIDCApp(ctx context.Context, orgID, projectID string, r
 }
 func (z *fakeZitadel) AddOrganization(ctx context.Context, name string) (string, error) {
 	return "", nil
+}
+func (z *fakeZitadel) RemoveOrg(ctx context.Context, orgID string) error {
+	z.removeOrgCalls = append(z.removeOrgCalls, orgID)
+	return z.removeOrgErr
 }
 
 func newLogger() *slog.Logger {
@@ -265,6 +271,138 @@ func TestOrchestrator_Run_OrgFailureMarksFailedAndStops(t *testing.T) {
 	}
 	if onReadyCalled {
 		t.Error("OnReady should not fire on install failure")
+	}
+}
+
+// --- S15: opportunistic ZITADEL cleanup -------------------------------------
+
+func TestOrchestrator_CleansUpOrgOnAddProjectFailure(t *testing.T) {
+	q := &fakeQueries{}
+	z := &fakeZitadel{
+		setUpOrgResp:  zitadel.SetUpOrgResponse{OrgID: "org-1"},
+		addProjectErr: errors.New("zitadel down"),
+	}
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Config:  newConfig("", "", "https://admin.example.com"),
+		Logger:  newLogger(),
+	}
+
+	if err := o.Run(context.Background(), newInput()); err == nil {
+		t.Fatal("expected error from AddProject failure")
+	}
+	if len(z.removeOrgCalls) != 1 || z.removeOrgCalls[0] != "org-1" {
+		t.Errorf("RemoveOrg calls = %v; want [org-1]", z.removeOrgCalls)
+	}
+	if !q.markedFailedErr.Valid {
+		t.Fatal("expected workspace marked failed")
+	}
+	if !strings.Contains(q.markedFailedErr.String, "create_project") {
+		t.Errorf("install_error = %q; want to mention create_project", q.markedFailedErr.String)
+	}
+	if strings.Contains(q.markedFailedErr.String, "cleanup failed") {
+		t.Errorf("install_error mentions cleanup failure unexpectedly: %q", q.markedFailedErr.String)
+	}
+}
+
+func TestOrchestrator_CleansUpOrgOnAddOIDCAppFailure(t *testing.T) {
+	q := &fakeQueries{}
+	z := &fakeZitadel{
+		setUpOrgResp:   zitadel.SetUpOrgResponse{OrgID: "org-1"},
+		addProjectResp: "proj-1",
+		addOIDCErr:     errors.New("zitadel rejected app"),
+	}
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Config:  newConfig("", "", "https://admin.example.com"),
+		Logger:  newLogger(),
+	}
+
+	if err := o.Run(context.Background(), newInput()); err == nil {
+		t.Fatal("expected error from AddOIDCApp failure")
+	}
+	if len(z.removeOrgCalls) != 1 || z.removeOrgCalls[0] != "org-1" {
+		t.Errorf("RemoveOrg calls = %v; want [org-1] (cascade removes project + app)", z.removeOrgCalls)
+	}
+	if !strings.Contains(q.markedFailedErr.String, "create_oidc_app") {
+		t.Errorf("install_error = %q; want to mention create_oidc_app", q.markedFailedErr.String)
+	}
+}
+
+func TestOrchestrator_CleansUpOrgOnPersistFailure(t *testing.T) {
+	q := &fakeQueries{persistIDsErr: errors.New("db write failed")}
+	z := &fakeZitadel{
+		setUpOrgResp:   zitadel.SetUpOrgResponse{OrgID: "org-1"},
+		addProjectResp: "proj-1",
+		addOIDCResp:    zitadel.AddOIDCAppResponse{AppID: "app-1", ClientID: "cli-1"},
+	}
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Config:  newConfig("", "", "https://admin.example.com"),
+		Logger:  newLogger(),
+	}
+
+	if err := o.Run(context.Background(), newInput()); err == nil {
+		t.Fatal("expected error from persist failure")
+	}
+	if len(z.removeOrgCalls) != 1 || z.removeOrgCalls[0] != "org-1" {
+		t.Errorf("RemoveOrg calls = %v; want [org-1]", z.removeOrgCalls)
+	}
+	if !strings.Contains(q.markedFailedErr.String, "persist_ids") {
+		t.Errorf("install_error = %q; want to mention persist_ids", q.markedFailedErr.String)
+	}
+}
+
+func TestOrchestrator_RecordsCleanupFailureInInstallError(t *testing.T) {
+	q := &fakeQueries{}
+	z := &fakeZitadel{
+		setUpOrgResp:  zitadel.SetUpOrgResponse{OrgID: "org-1"},
+		addProjectErr: errors.New("zitadel transient"),
+		removeOrgErr:  errors.New("ZITADEL still down"),
+	}
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Config:  newConfig("", "", "https://admin.example.com"),
+		Logger:  newLogger(),
+	}
+
+	if err := o.Run(context.Background(), newInput()); err == nil {
+		t.Fatal("expected error")
+	}
+	if len(z.removeOrgCalls) != 1 {
+		t.Errorf("RemoveOrg calls = %v; want exactly one attempt (no retry)", z.removeOrgCalls)
+	}
+	msg := q.markedFailedErr.String
+	if !strings.Contains(msg, "create_project") {
+		t.Errorf("install_error missing original failure: %q", msg)
+	}
+	if !strings.Contains(msg, "cleanup failed") {
+		t.Errorf("install_error missing cleanup failure marker: %q", msg)
+	}
+	if !strings.Contains(msg, "ZITADEL still down") {
+		t.Errorf("install_error missing cleanup error message: %q", msg)
+	}
+}
+
+func TestOrchestrator_NoCleanupWhenSetUpOrgFails(t *testing.T) {
+	q := &fakeQueries{}
+	z := &fakeZitadel{setUpOrgErr: errors.New("zitadel rejected")}
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Config:  newConfig("", "", "https://admin.example.com"),
+		Logger:  newLogger(),
+	}
+
+	if err := o.Run(context.Background(), newInput()); err == nil {
+		t.Fatal("expected error")
+	}
+	if len(z.removeOrgCalls) != 0 {
+		t.Errorf("RemoveOrg calls = %v; want none — no orgID was returned, nothing to clean", z.removeOrgCalls)
 	}
 }
 
