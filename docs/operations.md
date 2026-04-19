@@ -323,14 +323,20 @@ Starting state: PAT compromised or age-policy triggered rotation.
    its IAM_OWNER grant).
 2. `kubectl patch secret gospa-zitadel-provisioner --type=json \
       -p='[{"op":"replace","path":"/data/pat","value":"<base64>"}]'`
-3. `kubectl rollout restart deployment/gospa`.
-4. Pod picks up the new PAT. Workspace state, project id, existing
-   tokens — all unchanged. Company creation continues to work.
+3. The kubelet refreshes the projected volume; `internal/patwatch`
+   in cmd/app sees the basename change inside the parent directory
+   (Kubernetes rotates Secrets via atomic symlink swap) and reloads
+   the value into memory. The next ZITADEL request — provisioning,
+   company creation — uses the new PAT. No restart, no dropped
+   request, no manual step beyond the `kubectl patch` above.
 
-The Deployment's `projected` volume would auto-refresh the mounted
-file without a restart, but cmd/app reads the PAT once at startup,
-so the restart is the simplest path. A future improvement could
-re-read on each provisioning call.
+If the new file is briefly empty or unreadable mid-rotation, the
+watcher keeps the previous PAT (last-known-good) and logs a
+warning; runtime never sees an empty bearer.
+
+`kubectl rollout restart deployment/gospa` still works as a fallback
+when the operator wants to force-reset the process for unrelated
+reasons, but it is no longer required for rotation.
 
 ### Scenario K5 — Scaling up after install
 

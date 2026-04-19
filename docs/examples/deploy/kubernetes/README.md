@@ -86,8 +86,13 @@ kubectl apply -f docs/examples/deploy/kubernetes/
 ## MVP debts relevant to K8s
 
 - **Single PAT.** Reused for bootstrap and company-creation runtime
-  calls. Rotation is manual: generate new PAT, update the Secret,
-  `kubectl rollout restart deployment/gospa`.
+  calls. Rotation is in-place: generate a new PAT, update the
+  Secret, and the Pod's `internal/patwatch` reloads the file when
+  the kubelet refreshes the projected volume — no
+  `kubectl rollout restart` required. Splitting bootstrap and
+  runtime credentials only buys real security once they have
+  different scopes; today both need IAM_OWNER for `AddOrganization`,
+  so the split is deferred.
 - **One replica during install.** The orchestrator uses an in-process
   single-flight guard, so scaling up during the install window is
   unsafe. Scale up after `install_state = ready`. Restate will lift

@@ -1,73 +1,49 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Gabrielbdd/gospa/config"
 )
 
-func TestLoadProvisionerPAT(t *testing.T) {
-	dir := t.TempDir()
-
-	goodFile := filepath.Join(dir, "good.pat")
-	if err := os.WriteFile(goodFile, []byte("token-from-config\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	envFile := filepath.Join(dir, "env.pat")
-	if err := os.WriteFile(envFile, []byte("token-from-env\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	emptyFile := filepath.Join(dir, "empty.pat")
-	if err := os.WriteFile(emptyFile, []byte("   \n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
+// TestResolveProvisionerPATPath covers the precedence between the
+// env-var override (Kubernetes Secret mount path) and gofra.yaml's
+// zitadel.provisioner_pat_file. The actual file read + last-known-good
+// behavior live in internal/patwatch and are tested there.
+func TestResolveProvisionerPATPath(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		configPath string
-		envPath   string
-		want      string
-		wantErr   string
+		envPath    string
+		want       string
+		wantErr    string
 	}{
 		{
-			name:       "reads config path when env is empty",
-			configPath: goodFile,
-			want:       "token-from-config",
+			name:       "env wins over config when both are set",
+			configPath: "/from/config.pat",
+			envPath:    "/from/env.pat",
+			want:       "/from/env.pat",
 		},
 		{
-			name:       "env path overrides config path",
-			configPath: goodFile,
-			envPath:    envFile,
-			want:       "token-from-env",
+			name:       "config used when env is empty",
+			configPath: "/from/config.pat",
+			want:       "/from/config.pat",
 		},
 		{
-			name:    "empty config + no env errors with actionable message",
+			name:    "neither set returns actionable error",
 			wantErr: "no provisioner PAT path configured",
-		},
-		{
-			name:       "missing file produces actionable error",
-			configPath: filepath.Join(dir, "nonexistent.pat"),
-			wantErr:    "reading provisioner PAT",
-		},
-		{
-			name:       "empty file produces error",
-			configPath: emptyFile,
-			wantErr:    "reading provisioner PAT",
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(provisionerPATEnv, tc.envPath)
-
 			cfg := &config.Config{
 				Zitadel: config.ZitadelConfig{ProvisionerPatFile: tc.configPath},
 			}
 
-			got, err := loadProvisionerPAT(cfg)
+			got, err := resolveProvisionerPATPath(cfg)
 			if tc.wantErr != "" {
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tc.wantErr)

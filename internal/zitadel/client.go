@@ -68,19 +68,24 @@ type AddOIDCAppResponse struct {
 
 // HTTPClient is the real implementation backed by net/http.
 type HTTPClient struct {
-	baseURL string
-	pat     string
-	http    *http.Client
+	baseURL     string
+	patProvider func() string
+	http        *http.Client
 }
 
-// NewHTTPClient constructs an HTTPClient. baseURL is the ZITADEL instance
-// root (e.g. "http://localhost:8081"). pat is the provisioner Personal
-// Access Token with IAM_OWNER grant.
-func NewHTTPClient(baseURL, pat string, httpClient *http.Client) *HTTPClient {
+// NewHTTPClient constructs an HTTPClient. baseURL is the ZITADEL
+// instance root (e.g. "http://localhost:8081"). patProvider returns
+// the current provisioner Personal Access Token (IAM_OWNER) at the
+// moment a request is built — this is what lets cmd/app rotate the
+// PAT in place via internal/patwatch without rebuilding the client.
+func NewHTTPClient(baseURL string, patProvider func() string, httpClient *http.Client) *HTTPClient {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &HTTPClient{baseURL: baseURL, pat: pat, http: httpClient}
+	if patProvider == nil {
+		patProvider = func() string { return "" }
+	}
+	return &HTTPClient{baseURL: baseURL, patProvider: patProvider, http: httpClient}
 }
 
 // --- Admin API ---------------------------------------------------------
@@ -230,6 +235,14 @@ func (c *HTTPClient) AddOIDCApp(ctx context.Context, orgID, projectID string, re
 // --- HTTP plumbing -----------------------------------------------------
 
 func (c *HTTPClient) post(ctx context.Context, path, orgID string, body, out any) error {
+	pat := c.patProvider()
+	if pat == "" {
+		// Should never happen at runtime: the patwatch is fail-closed
+		// at startup and last-known-good after that. Surface it
+		// loudly if it ever does, instead of issuing an unauthenticated
+		// request that ZITADEL would 401.
+		return fmt.Errorf("zitadel: provisioner PAT not available")
+	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -239,7 +252,7 @@ func (c *HTTPClient) post(ctx context.Context, path, orgID string, body, out any
 		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.pat)
+	req.Header.Set("Authorization", "Bearer "+pat)
 	if orgID != "" {
 		req.Header.Set("x-zitadel-orgid", orgID)
 	}

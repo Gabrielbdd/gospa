@@ -16,8 +16,6 @@ import (
 	runtimedatabase "github.com/Gabrielbdd/gofra/runtime/database"
 	runtimehealth "github.com/Gabrielbdd/gofra/runtime/health"
 	runtimeserve "github.com/Gabrielbdd/gofra/runtime/serve"
-	zitadelsecret "github.com/Gabrielbdd/gofra/runtime/zitadel/secret"
-
 	"github.com/Gabrielbdd/gospa/config"
 	"github.com/Gabrielbdd/gospa/db"
 	"github.com/Gabrielbdd/gospa/db/sqlc"
@@ -27,6 +25,7 @@ import (
 	"github.com/Gabrielbdd/gospa/internal/companies"
 	"github.com/Gabrielbdd/gospa/internal/install"
 	"github.com/Gabrielbdd/gospa/internal/installtoken"
+	"github.com/Gabrielbdd/gospa/internal/patwatch"
 	"github.com/Gabrielbdd/gospa/internal/publicconfig"
 	"github.com/Gabrielbdd/gospa/internal/zitadel"
 	"github.com/Gabrielbdd/gospa/internal/zitadelcontract"
@@ -83,17 +82,30 @@ func main() {
 
 	ctx := context.Background()
 
-	// --- Zitadel provisioner PAT (hard startup contract) -------------------
+	// --- Zitadel provisioner PAT (hard startup contract + hot reload) -----
 	// Gospa refuses to start unless a valid provisioner PAT is already on
 	// disk. In local dev `mise run infra` materialises the file; in
 	// Kubernetes the operator mounts a Secret at the configured path.
+	//
+	// patwatch keeps the value fresh after startup: rotating the file
+	// (or atomically renaming a Kubernetes Secret) is picked up by the
+	// next ZITADEL request without a process restart. Last-known-good
+	// semantics mean a transient empty/missing read never erases the
+	// runtime PAT — the Watcher just keeps serving the previous value
+	// and logs a warning.
 
-	provisionerPAT, err := loadProvisionerPAT(cfg)
+	patPath, err := resolveProvisionerPATPath(cfg)
+	if err != nil {
+		slog.Error("zitadel provisioner PAT path unset; refusing to start", "error", err)
+		os.Exit(1)
+	}
+	patWatcher, err := patwatch.New(patPath, slog.Default())
 	if err != nil {
 		slog.Error("zitadel provisioner PAT unavailable; refusing to start", "error", err)
 		os.Exit(1)
 	}
-	slog.Info("zitadel provisioner PAT loaded")
+	defer patWatcher.Close()
+	slog.Info("zitadel provisioner PAT loaded and watched", "path", patPath)
 
 	// --- Install token (bootstrap secret for /install) ---------------------
 
@@ -133,7 +145,7 @@ func main() {
 
 	// --- Zitadel admin client + install orchestrator + auth gate -----------
 
-	zitadelClient := zitadel.NewHTTPClient(cfg.Zitadel.AdminAPIURL, provisionerPAT, nil)
+	zitadelClient := zitadel.NewHTTPClient(cfg.Zitadel.AdminAPIURL, patWatcher.Get, nil)
 	queries := sqlc.New(pool)
 
 	// The auth gate starts as a pass-through so the /install wizard
@@ -323,12 +335,11 @@ func logInstallTokenSource(token string, src installtoken.Source) {
 	}
 }
 
-// loadProvisionerPAT resolves the PAT path (env-var override beats config)
-// and reads the file. Returns an actionable error if the path is empty, the
-// file is missing, or the file is empty. Called at startup; the returned
-// token is consumed by later handlers (install, companies) once those wire
-// in.
-func loadProvisionerPAT(cfg *config.Config) (string, error) {
+// resolveProvisionerPATPath returns the filesystem path the patwatch
+// should observe: env-var override (Kubernetes Secret mount) beats
+// the gofra.yaml config value. Path-only — actual file read +
+// last-known-good behavior live in internal/patwatch.
+func resolveProvisionerPATPath(cfg *config.Config) (string, error) {
 	path := os.Getenv(provisionerPATEnv)
 	if path == "" {
 		path = cfg.Zitadel.ProvisionerPatFile
@@ -339,14 +350,7 @@ func loadProvisionerPAT(cfg *config.Config) (string, error) {
 			provisionerPATEnv,
 		)
 	}
-	pat, err := zitadelsecret.Read(zitadelsecret.Source{FilePath: path})
-	if err != nil {
-		return "", fmt.Errorf(
-			"reading provisioner PAT at %q: %w (run `mise run infra` locally, or mount the Kubernetes Secret before starting)",
-			path, err,
-		)
-	}
-	return pat, nil
+	return path, nil
 }
 
 // parseDuration parses a Go duration string (e.g. "30m", "1h"). Returns zero
