@@ -16,9 +16,11 @@ package authgate
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -46,10 +48,19 @@ func New(isPublic runtimeauth.ProcedureMatcher) *Gate {
 	return &Gate{isPublic: isPublic}
 }
 
-// Middleware is a chi-compatible middleware. While inactive it
-// delegates straight to next; once Activate has stored a verifier the
-// next request lazily compiles the authenticated chain (cached per
-// verifier pointer) and serves through it.
+// Middleware is a chi-compatible middleware. While inactive it lets
+// non-Connect paths and explicitly-public Connect procedures through;
+// any other Connect procedure is a private app RPC that must not be
+// reachable before install completes, so it gets a 401 immediately
+// without invoking the wrapped handler. Once Activate has stored a
+// verifier the next request lazily compiles the authenticated chain
+// (cached per verifier pointer) and serves through it.
+//
+// The pre-install fail-closed branch is the gate's job, not each
+// handler's: requireReady guards in app handlers stay as defense in
+// depth, but a forgotten requireReady on a new private RPC is no
+// longer the only thing standing between an unauthenticated caller
+// and the handler body.
 func (g *Gate) Middleware(next http.Handler) http.Handler {
 	var (
 		mu       sync.Mutex
@@ -59,6 +70,10 @@ func (g *Gate) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vp := g.verifier.Load()
 		if vp == nil {
+			if isConnectProcedure(r.URL.Path) && (g.isPublic == nil || !g.isPublic(r.URL.Path)) {
+				writeUnauthenticated(w, "workspace is not installed yet; complete /install first")
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -102,4 +117,43 @@ func (g *Gate) Activate(ctx context.Context, issuer, audience string) error {
 // requests. Primarily useful for diagnostics and tests.
 func (g *Gate) IsActive() bool {
 	return g.verifier.Load() != nil
+}
+
+// isConnectProcedure reports whether the path looks like a Connect RPC
+// procedure. Mirrors runtime/auth.isConnectProcedure (kept local so
+// the pre-install fail-closed policy stays a product-level decision in
+// gospa rather than widening Gofra's runtime surface). Connect
+// procedures have the form "/<package>.<Service>/<Method>" — the
+// first path segment contains a dot AND is followed by a second
+// segment.
+func isConnectProcedure(path string) bool {
+	if len(path) < 2 || path[0] != '/' {
+		return false
+	}
+	rest := path[1:]
+	i := strings.IndexByte(rest, '/')
+	if i < 0 {
+		return false
+	}
+	seg := rest[:i]
+	return strings.ContainsRune(seg, '.')
+}
+
+// connectError is the JSON wire format for Connect error responses.
+type connectError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+// writeUnauthenticated emits a Connect-compatible 401 JSON body so
+// clients that speak Connect (the SPA's apiCall helper, buf-curl,
+// etc.) surface a structured error instead of a plain "401
+// Unauthorized" string.
+func writeUnauthenticated(w http.ResponseWriter, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_ = json.NewEncoder(w).Encode(connectError{
+		Code:    "unauthenticated",
+		Message: msg,
+	})
 }

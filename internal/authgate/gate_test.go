@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -13,7 +14,19 @@ import (
 	"github.com/Gabrielbdd/gospa/internal/authgate"
 )
 
-func TestGate_PassesThroughBeforeActivate(t *testing.T) {
+const (
+	// Connect procedure paths used across the tests. The install
+	// service is the canonical "public" Connect procedure (the gate's
+	// PublicProcedures matcher passes it through pre-install); the
+	// companies service is the canonical "private" app procedure that
+	// must be blocked pre-install and JWT-guarded post-install.
+	publicProc  = "/gospa.install.v1.InstallService/GetStatus"
+	privateProc = "/gospa.companies.v1.CompaniesService/ListCompanies"
+)
+
+// --- inactive-gate behavior --------------------------------------------------
+
+func TestGate_InactivePassesNonConnectPath(t *testing.T) {
 	gate := authgate.New(runtimeauth.PublicProcedures())
 
 	var invoked bool
@@ -23,16 +36,67 @@ func TestGate_PassesThroughBeforeActivate(t *testing.T) {
 	}))
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/gospa.companies.v1.CompaniesService/ListCompanies", nil)
-	mw.ServeHTTP(rec, req)
+	mw.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_gofra/config.js", nil))
 
 	if !invoked {
-		t.Error("expected pass-through to invoke next handler")
+		t.Error("non-Connect path should pass through to next handler")
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("non-Connect path got %d; want 200", rec.Code)
 	}
 	if gate.IsActive() {
 		t.Error("gate should be inactive before Activate is called")
 	}
 }
+
+func TestGate_InactivePassesPublicConnectProcedure(t *testing.T) {
+	gate := authgate.New(runtimeauth.PublicProcedures(publicProc))
+
+	var invoked bool
+	mw := gate.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		invoked = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, publicProc, nil))
+
+	if !invoked {
+		t.Errorf("public Connect procedure should pass through pre-install; got status %d", rec.Code)
+	}
+}
+
+func TestGate_InactiveBlocksPrivateConnectProcedure(t *testing.T) {
+	gate := authgate.New(runtimeauth.PublicProcedures(publicProc))
+
+	var invoked bool
+	mw := gate.Middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		invoked = true
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	rec := httptest.NewRecorder()
+	mw.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, privateProc, nil))
+
+	if invoked {
+		t.Fatal("private Connect procedure must not reach the handler before install")
+	}
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d; want 401", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q; want application/json", ct)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"code":"unauthenticated"`) {
+		t.Errorf("body = %s; want Connect-shape unauthenticated error", body)
+	}
+	if !strings.Contains(body, "complete /install") {
+		t.Errorf("body = %s; want hint pointing operator at /install", body)
+	}
+}
+
+// --- Activate guards --------------------------------------------------------
 
 func TestGate_ActivateRejectsEmptyIssuerOrAudience(t *testing.T) {
 	gate := authgate.New(runtimeauth.PublicProcedures())
@@ -48,21 +112,20 @@ func TestGate_ActivateRejectsEmptyIssuerOrAudience(t *testing.T) {
 	}
 }
 
+// --- mount-order coverage ---------------------------------------------------
+
 // TestGate_ActivateBeforeMiddlewareInvocationStillWorks is the
-// regression test for the chi-lazy bug: cmd/app/main.go calls
-// gate.Activate after app.Use(gate.Middleware), but chi only invokes
-// the middleware function on the first request. Activate must
-// therefore work without requiring the wrapped next handler to be
-// supplied. Once the subsequent request flows through, the lazily-
-// built authenticated chain serves it.
+// regression test for chi's lazy middleware: cmd/app calls Activate
+// after app.Use(gate.Middleware) but chi only invokes Middleware on
+// the first request. Activate must therefore work without the wrapped
+// next handler being supplied yet — the lazily-built authenticated
+// chain picks up the verifier on the first request that flows through.
 func TestGate_ActivateBeforeMiddlewareInvocationStillWorks(t *testing.T) {
 	srv := newOIDCDiscoveryStub(t)
 	defer srv.Close()
 
-	gate := authgate.New(runtimeauth.PublicProcedures())
+	gate := authgate.New(runtimeauth.PublicProcedures(publicProc))
 
-	// Activate first — the way cmd/app/main.go does for established
-	// deployments — without ever having invoked gate.Middleware(...).
 	if err := gate.Activate(t.Context(), srv.URL, "test-audience"); err != nil {
 		t.Fatalf("Activate before any Middleware invocation failed: %v", err)
 	}
@@ -70,64 +133,75 @@ func TestGate_ActivateBeforeMiddlewareInvocationStillWorks(t *testing.T) {
 		t.Fatal("gate should be active after successful Activate")
 	}
 
-	// Now mount through chi and serve a request. The middleware
-	// function fires for the first time inside chi.ServeHTTP and must
-	// pick up the already-stored verifier.
 	router := chi.NewRouter()
 	router.Use(gate.Middleware)
-	router.HandleFunc("/gospa.companies.v1.CompaniesService/*", func(w http.ResponseWriter, _ *http.Request) {
+	router.HandleFunc(privateProc, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/gospa.companies.v1.CompaniesService/ListCompanies", nil)
-	router.ServeHTTP(rec, req)
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, privateProc, nil))
 
-	// Without a Bearer the auth middleware rejects: status will be
-	// 401 (unauthenticated). The exact status comes from runtime/auth
-	// — we only need to confirm the request did NOT pass through to
-	// the protected handler, which would write 200.
+	// Without a Bearer the authenticated chain rejects (401). The
+	// only thing that would flip rec.Code to 200 is the gate having
+	// failed to install the verifier — which is the bug we are
+	// guarding against here.
 	if rec.Code == http.StatusOK {
 		t.Errorf("expected protected route to be guarded; got 200 — gate did not pick up the pre-Mount Activate")
 	}
 }
 
 // TestGate_ActivateAfterMountStillWorks covers the inverse ordering:
-// chi mounts and the first request fires before Activate. The first
-// request passes through; a second request after Activate runs is
-// authenticated.
+// chi has already served pre-Activate requests when Activate finally
+// runs. Pre-Activate, a non-Connect path passes through; a private
+// Connect path is blocked by the inactive-gate fail-closed branch.
+// Post-Activate, the private Connect path is now guarded by the JWT
+// chain instead.
 func TestGate_ActivateAfterMountStillWorks(t *testing.T) {
 	srv := newOIDCDiscoveryStub(t)
 	defer srv.Close()
 
-	gate := authgate.New(runtimeauth.PublicProcedures())
+	gate := authgate.New(runtimeauth.PublicProcedures(publicProc))
 
 	router := chi.NewRouter()
 	router.Use(gate.Middleware)
-	router.HandleFunc("/gospa.companies.v1.CompaniesService/*", func(w http.ResponseWriter, _ *http.Request) {
+	router.HandleFunc("/_gofra/config.js", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	router.HandleFunc(privateProc, func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// First request: pass-through.
+	// Pre-Activate, non-Connect path: passes through.
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/gospa.companies.v1.CompaniesService/ListCompanies", nil)
-	router.ServeHTTP(rec, req)
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/_gofra/config.js", nil))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("pre-Activate request blocked: code %d", rec.Code)
+		t.Fatalf("pre-Activate non-Connect request blocked: code %d", rec.Code)
 	}
 
-	// Activate; subsequent request should be guarded.
+	// Pre-Activate, private Connect path: blocked by inactive-gate
+	// fail-closed branch (the new behavior in this slice).
+	rec = httptest.NewRecorder()
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, privateProc, nil))
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("pre-Activate private Connect request: code %d; want 401", rec.Code)
+	}
+
 	if err := gate.Activate(t.Context(), srv.URL, "test-audience"); err != nil {
 		t.Fatalf("Activate failed: %v", err)
 	}
 
+	// Post-Activate, private Connect path: guarded by JWT middleware
+	// (still 401 — no bearer — but the rejection is now from the
+	// active chain, not the inactive fail-closed branch).
 	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/protected", nil)
-	router.ServeHTTP(rec, req)
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, privateProc, nil))
 	if rec.Code == http.StatusOK {
-		t.Errorf("expected post-Activate request to be guarded; got 200")
+		t.Errorf("post-Activate private request not guarded; code %d", rec.Code)
 	}
 }
+
+// --- helpers ----------------------------------------------------------------
 
 // newOIDCDiscoveryStub returns an httptest.Server that serves the minimal
 // OIDC discovery document required by runtimeauth.NewJWTVerifier. The JWKS
