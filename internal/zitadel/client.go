@@ -183,15 +183,16 @@ func (c *HTTPClient) AddProject(ctx context.Context, orgID, name string) (string
 }
 
 type addOIDCAppWireRequest struct {
-	Name           string   `json:"name"`
-	RedirectUris   []string `json:"redirectUris,omitempty"`
-	ResponseTypes  []string `json:"responseTypes,omitempty"`
-	GrantTypes     []string `json:"grantTypes,omitempty"`
-	AppType        string   `json:"appType,omitempty"`
-	AuthMethodType string   `json:"authMethodType,omitempty"`
-	PostLogoutUris []string `json:"postLogoutRedirectUris,omitempty"`
-	Version        string   `json:"version,omitempty"`
-	DevMode        bool     `json:"devMode,omitempty"`
+	Name            string   `json:"name"`
+	RedirectUris    []string `json:"redirectUris,omitempty"`
+	ResponseTypes   []string `json:"responseTypes,omitempty"`
+	GrantTypes      []string `json:"grantTypes,omitempty"`
+	AppType         string   `json:"appType,omitempty"`
+	AuthMethodType  string   `json:"authMethodType,omitempty"`
+	PostLogoutUris  []string `json:"postLogoutRedirectUris,omitempty"`
+	Version         string   `json:"version,omitempty"`
+	DevMode         bool     `json:"devMode,omitempty"`
+	AccessTokenType string   `json:"accessTokenType,omitempty"`
 }
 
 type addOIDCAppWireResponse struct {
@@ -210,6 +211,13 @@ func (c *HTTPClient) AddOIDCApp(ctx context.Context, orgID, projectID string, re
 		PostLogoutUris: req.PostLogoutURIs,
 		Version:        "OIDC_VERSION_1_0",
 		DevMode:        req.DevMode,
+		// JWT access tokens, not opaque. The Gospa gate validates
+		// access tokens locally via the OIDC discovery JWKS path
+		// (runtime/auth/verifier.go), which cannot decode opaque
+		// tokens. ZITADEL's default for new OIDC apps is BEARER
+		// (opaque); we override to JWT here so the audience scope
+		// + signature + iss + exp checks all run against a real JWT.
+		AccessTokenType: "OIDC_TOKEN_TYPE_JWT",
 	}
 	path := fmt.Sprintf("/management/v1/projects/%s/apps/oidc", projectID)
 	var out addOIDCAppWireResponse
