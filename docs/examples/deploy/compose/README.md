@@ -8,6 +8,16 @@ Run Gospa + PostgreSQL with two downloaded files and one command.
 > and rolling `:edge` images. Treat it as an evaluation harness for
 > your own laptop, nothing more.
 >
+> **Identity is not configured here.** The quickrun compose starts
+> only PostgreSQL and the Gospa binary — it does NOT launch ZITADEL
+> and does NOT materialise the provisioner PAT file that Gospa
+> requires at startup. The container will exit `1` on first boot
+> with a clear error about a missing PAT file. For a runnable local
+> setup, clone the repo and run `mise run infra` (which brings up
+> ZITADEL alongside Postgres and produces the PAT via the
+> `FirstInstance.PatPath` bootstrap). A future quickrun variant
+> that bundles ZITADEL will ship with the Gospa documentation site.
+>
 > This directory is a placeholder until Gospa has its own documentation
 > site with real deployment guides.
 
