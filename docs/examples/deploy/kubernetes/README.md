@@ -2,46 +2,76 @@
 
 A minimal set of manifests that shows the operational contract Gospa
 expects in a Kubernetes cluster. **Not production-ready on its own** —
-use it as a starting point for a real deployment (ingress, TLS,
-database, monitoring).
+use it as a starting point for a real deployment (Ingress, TLS, cert
+issuer, managed Postgres, monitoring, backups).
 
-## The operational contract
+## Prerequisites
 
-Gospa's hard startup invariant is that a ZITADEL provisioner Personal
-Access Token must be present on disk at a path the operator chooses.
-In Kubernetes this is a `Secret` mounted read-only as a file; the
-`Deployment` points the `GOSPA_ZITADEL_PROVISIONER_PAT_FILE`
-environment variable at that path.
+The manifests **do not deploy ZITADEL or Postgres**. You provide both:
 
-The Gospa container does **not**:
+| Dependency | What you need |
+|---|---|
+| ZITADEL | A reachable ZITADEL instance (Cloud or self-hosted). A **machine user** with the **IAM_OWNER** grant, and a **Personal Access Token** for that user. |
+| Postgres | A Postgres database + user Gospa can write to. DSN lands in a `Secret` (not shown). |
+| Ingress / LoadBalancer | A public HTTPS URL that routes to the `gospa` Service on port 3000. |
 
-- Contact ZITADEL at startup to resolve the PAT.
-- Wait for a bootstrap Job.
-- Watch the filesystem for the secret to appear.
+The PAT is the credential that lets Gospa call ZITADEL's Admin API to
+create the MSP org, project, and OIDC application during `/install`.
+Generate it in the ZITADEL console (Users → Service Users →
+`gospa-provisioner` → Personal Access Tokens → Add) or via Terraform /
+Pulumi / Crossplane against the ZITADEL provider.
 
-If the file is missing or empty, the Pod exits `1` with an actionable
-log line. Liveness and readiness probes therefore protect nothing
-— the container fails fast on first start.
+## Install flow in Kubernetes
 
-Provisioning the PAT itself is **out of scope for this manifest set**.
-Operators typically do one of:
+1. **Create the PAT Secret** (`secret.yaml`) with your real token.
+2. **Create the Postgres DSN Secret** (not included — shape:
+   `kubectl create secret generic gospa-database --from-literal=dsn="postgres://..."`).
+3. **Edit `deployment.yaml`** env values to match your cluster:
+   - `GOFRA_ZITADEL__ADMIN_API_URL`: the ZITADEL base URL.
+   - `GOFRA_PUBLIC__API_BASE_URL`: the public Gospa URL (matters for
+     the OIDC redirect URIs the install wizard writes to ZITADEL).
+   - `GOFRA_PUBLIC__AUTH__ISSUER`: usually the same as the admin URL;
+     override only when the browser reaches ZITADEL through a
+     different host than the cluster does.
+4. **`kubectl apply -f docs/examples/deploy/kubernetes/`**. The Pod
+   starts; cmd/app verifies the PAT file is readable and the DB is
+   reachable, runs auto-migrations, and serves. Auth is **disabled at
+   this point** because workspace.install_state is `not_initialized`
+   — the `/install` wizard is deliberately public.
+5. **Protect the URL with an allowlist** (Ingress annotation, VPN,
+   `kubectl port-forward`, etc.). The install flow has no install
+   key in this MVP; a reachable `/install` is an open bootstrap
+   endpoint. The SPA shows a banner warning, but operators must
+   provide the network-level protection.
+6. **Open the Gospa URL** → redirects to `/install`. Fill the wizard
+   (workspace name/slug/timezone/currency + first admin's name and
+   email). Submit. The orchestrator calls ZITADEL through the
+   provisioner PAT and creates the MSP org, project, and OIDC SPA
+   application. Poll to `ready`.
+7. **Restart the Deployment** once:
 
-- Create a ZITADEL service account with IAM_OWNER, generate a PAT in
-  the ZITADEL UI, and put it in the `Secret` directly
-  (`kubectl create secret generic gospa-zitadel-provisioner
-  --from-literal=pat=<PAT>`).
-- Automate the same with Terraform / Pulumi / Crossplane against the
-  ZITADEL provider.
-- Run a one-shot Job that calls ZITADEL's AdminService to mint the
-  PAT and writes it into the `Secret` before the Deployment rolls.
+   ```bash
+   kubectl rollout restart deployment/gospa
+   ```
+
+   On restart, cmd/app reads the freshly-installed workspace row,
+   auto-derives the JWT middleware from
+   `workspace.zitadel_project_id` + `GOFRA_ZITADEL__ADMIN_API_URL`,
+   and enables auth. There is no manual config step — the restart
+   exists only because the middleware wires at process start.
+8. **Remove the allowlist** once auth is active; the Service is now
+   safe to expose.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `secret.yaml`     | Holds the provisioner PAT under key `pat`. Created by the operator. |
-| `deployment.yaml` | Mounts the Secret read-only, wires the env var, sets probes. |
-| `service.yaml`    | `ClusterIP:3000` service for the Gospa HTTP surface. |
+| `secret.yaml`     | Holds the provisioner PAT under key `pat`. Operator-filled. |
+| `deployment.yaml` | Mounts the Secret, sets env, probes, single replica. |
+| `service.yaml`    | `ClusterIP:3000` for the Gospa HTTP surface. |
+
+Not included (you bring your own): Ingress / Gateway, certificate
+issuer, Postgres StatefulSet or managed DSN Secret, HorizontalPodAutoscaler.
 
 ## Apply
 
@@ -51,23 +81,20 @@ kubectl apply --dry-run=client -f docs/examples/deploy/kubernetes/
 kubectl apply -f docs/examples/deploy/kubernetes/
 ```
 
-## MVP debts
+## MVP debts relevant to K8s
 
-The install wizard has no install key in this MVP — anyone who can
-reach the `/install` route can trigger provisioning. Gate the Service
-behind a private Ingress, IP allowlist, or VPN until the workspace is
-installed. After install, the Install RPC returns `FailedPrecondition`
-for subsequent calls, but a determined attacker with network reach
-could still abuse the polling status endpoint during provisioning.
-
-The single PAT is reused for bootstrap and runtime provisioning
-operations (org creation for companies). Rotation is a manual
-operation — generate a new PAT, update the `Secret`, roll the
-Deployment. A future slice will split bootstrap and runtime
-credentials; until then, treat this PAT as a highly sensitive secret.
-
-The Deployment is single-replica. Horizontal scaling is safe for
-normal traffic but the install flow assumes a single process (it uses
-a sync-group to serialise the orchestrator); scale up only after
-install completes, or leave the replica count at 1 until the flow is
-refactored to use Restate in a later slice.
+- **No install key.** `/install` accepts provisioning without
+  authentication. Gate the Service behind a private Ingress, IP
+  allowlist, or temporary `kubectl port-forward` until the workspace
+  is installed.
+- **Single PAT.** Reused for bootstrap and company-creation runtime
+  calls. Rotation is manual: generate new PAT, update the Secret,
+  `kubectl rollout restart deployment/gospa`.
+- **One replica during install.** The orchestrator uses an in-process
+  single-flight guard, so scaling up during the install window is
+  unsafe. Scale up after `install_state = ready`. Restate will lift
+  this restriction in a later slice.
+- **Restart required to enable auth.** The JWT middleware is wired at
+  startup; after `/install` completes, one `kubectl rollout restart`
+  turns it on. This ceremony happens once in the life of the
+  workspace.

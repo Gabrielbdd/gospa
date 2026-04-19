@@ -28,14 +28,46 @@ spec:
             - name: http
               containerPort: 3000
           env:
-            # Hard startup contract: cmd/app refuses to start unless the
-            # file pointed to by this env var is a non-empty PAT.
+            # --- Hard startup contract ---------------------------------
+            # cmd/app refuses to start unless the file below is a
+            # non-empty provisioner PAT with IAM_OWNER on the ZITADEL
+            # instance reached by GOFRA_ZITADEL__ADMIN_API_URL.
             - name: GOSPA_ZITADEL_PROVISIONER_PAT_FILE
               value: /etc/gospa/zitadel/provisioner.pat
-            # Workspace DSN. Replace with your managed Postgres URL or
-            # an in-cluster database address.
+
+            # --- ZITADEL the app provisions into -----------------------
+            # The admin URL the /install orchestrator hits to create the
+            # MSP org, project, and OIDC SPA application. Post-install,
+            # the same URL becomes the JWT issuer the middleware
+            # validates tokens against.
+            - name: GOFRA_ZITADEL__ADMIN_API_URL
+              value: "https://auth.example.com"
+
+            # --- Public base URL the browser sees ----------------------
+            # Used as the origin when the /install orchestrator writes
+            # the OIDC SPA application's redirect URIs into ZITADEL, and
+            # as the API base the SPA calls back to. Must match the
+            # Ingress / LoadBalancer host.
+            - name: GOFRA_PUBLIC__API_BASE_URL
+              value: "https://gospa.example.com"
+
+            # --- SPA-facing ZITADEL (login authorize URL) --------------
+            # The SPA reads auth.issuer from /_gofra/config.js to build
+            # the authorize URL. Usually the same as the admin URL; set
+            # separately if ZITADEL is reached through a different
+            # hostname from the browser vs the cluster.
+            - name: GOFRA_PUBLIC__AUTH__ISSUER
+              value: "https://auth.example.com"
+
+            # --- Database ----------------------------------------------
+            # Point at your managed Postgres. SSL mode should match what
+            # the managed service requires (most cloud offerings need
+            # `require` or `verify-full`).
             - name: GOFRA_DATABASE__DSN
-              value: "postgres://gospa:gospa@postgres:5432/gospa?sslmode=disable"
+              valueFrom:
+                secretKeyRef:
+                  name: gospa-database
+                  key: dsn
           volumeMounts:
             - name: zitadel-pat
               mountPath: /etc/gospa/zitadel
