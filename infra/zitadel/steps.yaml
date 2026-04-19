@@ -1,0 +1,26 @@
+# ZITADEL FirstInstance bootstrap for the local Gospa dev stack.
+#
+# On first `mise run infra`, ZITADEL runs `start-from-init --steps`
+# with this file, creates a machine user in the default org with the
+# IAM_OWNER role, and writes the generated Personal Access Token to
+# the PatPath below. The host-side script scripts/copy-provisioner-pat.sh
+# copies the file from the bind-mounted volume into the well-known
+# `.secrets/zitadel-provisioner.pat` path that cmd/app reads at startup.
+#
+# This flow is dev-only. In Compose-cru and Kubernetes deploys, the
+# operator provides the PAT file ahead of time.
+
+FirstInstance:
+  # PAT is written inside the ZITADEL container; the compose volume
+  # binds this directory to ./.secrets/zitadel-provisioner-raw/ on the
+  # host.
+  PatPath: /zitadel-secrets/zitadel-provisioner.pat
+  Org:
+    Machine:
+      Machine:
+        Username: gospa-provisioner
+        Name: Gospa Provisioner
+      Pat:
+        # Far-future expiry — the bootstrap PAT is a dev credential, not
+        # a production secret. Regenerated on `mise run infra:reset`.
+        ExpirationDate: 2099-01-01T00:00:00Z

@@ -2,3 +2,7 @@
 /bin/
 /.DS_Store
 /.env
+
+# Secrets materialised by `mise run infra`. Only .gitkeep is tracked.
+/.secrets/*
+!/.secrets/.gitkeep
