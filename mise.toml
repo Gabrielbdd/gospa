@@ -1,6 +1,12 @@
 [tools]
 go = "1.25"
 node = "22"
+# goose CLI for migrations. The ubi backend pulls a pre-built binary
+# from the pressly/goose GitHub release — no global tool install
+# required. Keep the version in sync with the runtime/database
+# library dependency that ships with Gofra so CLI behavior matches
+# what auto-migrations apply on startup.
+"ubi:pressly/goose" = "3.27.0"
 
 [tasks.generate]
 description = "Generate config code (Go + TS) from proto"
