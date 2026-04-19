@@ -64,13 +64,16 @@ func (g *Gate) Middleware(next http.Handler) http.Handler {
 // discovery network failure, malformed issuer) or if the middleware
 // has not been mounted yet.
 func (g *Gate) Activate(ctx context.Context, audience string) error {
-	verifier, err := runtimeauth.NewJWTVerifier(ctx, g.issuer, audience)
-	if err != nil {
-		return err
-	}
+	// Fail fast on misuse before doing any network I/O. If the caller
+	// invoked Activate before mounting Middleware, OIDC discovery would
+	// otherwise mask the real bug behind a network error.
 	pt := g.passthrough.Load()
 	if pt == nil {
 		return ErrMiddlewareNotMounted
+	}
+	verifier, err := runtimeauth.NewJWTVerifier(ctx, g.issuer, audience)
+	if err != nil {
+		return err
 	}
 	wrapped := runtimeauth.NewMiddleware(verifier, g.isPublic)(*pt)
 	g.active.Store(&wrapped)

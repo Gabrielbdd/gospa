@@ -156,18 +156,6 @@ func main() {
 		}
 	}
 
-	// Eager activation for established deployments: if the workspace is
-	// already installed (pod restart, container rolling update), turn
-	// auth on immediately instead of waiting for a new install.
-	if ws, wsErr := queries.GetWorkspace(ctx); wsErr == nil &&
-		string(ws.InstallState) == "ready" && ws.ZitadelProjectID.Valid {
-		if err := gate.Activate(ctx, ws.ZitadelProjectID.String); err != nil {
-			slog.Warn("auth gate startup activation failed", "error", err)
-		}
-	} else {
-		slog.Info("auth disabled: workspace not installed yet; /install flow remains public")
-	}
-
 	// --- Health & Routing ---------------------------------------------------
 
 	health := runtimehealth.New(runtimehealth.Check{
@@ -185,6 +173,22 @@ func main() {
 	// install orchestrator activates it.
 	app := chi.NewRouter()
 	app.Use(gate.Middleware)
+
+	// Eager activation for established deployments: if the workspace is
+	// already installed (pod restart, container rolling update), turn
+	// auth on immediately instead of waiting for a new install. Must run
+	// after app.Use(gate.Middleware) so the gate's passthrough is wired —
+	// otherwise Activate fails with ErrMiddlewareNotMounted.
+	if ws, wsErr := queries.GetWorkspace(ctx); wsErr == nil &&
+		string(ws.InstallState) == "ready" && ws.ZitadelProjectID.Valid {
+		if err := gate.Activate(ctx, ws.ZitadelProjectID.String); err != nil {
+			slog.Error("auth gate startup activation failed; refusing to start", "error", err)
+			pool.Close()
+			os.Exit(1)
+		}
+	} else {
+		slog.Info("auth disabled: workspace not installed yet; /install flow remains public")
+	}
 	// /_gofra/config.js is served by the publicconfig wrapper so the
 	// browser receives auth.orgId from the workspace singleton. The SPA
 	// uses that field to scope its OIDC login request to the MSP org.
