@@ -47,20 +47,10 @@ Pulumi / Crossplane against the ZITADEL provider.
    (workspace name/slug/timezone/currency + first admin's name and
    email). Submit. The orchestrator calls ZITADEL through the
    provisioner PAT and creates the MSP org, project, and OIDC SPA
-   application. Poll to `ready`.
-7. **Restart the Deployment** once:
-
-   ```bash
-   kubectl rollout restart deployment/gospa
-   ```
-
-   On restart, cmd/app reads the freshly-installed workspace row,
-   auto-derives the JWT middleware from
-   `workspace.zitadel_project_id` + `GOFRA_ZITADEL__ADMIN_API_URL`,
-   and enables auth. There is no manual config step — the restart
-   exists only because the middleware wires at process start.
-8. **Remove the allowlist** once auth is active; the Service is now
-   safe to expose.
+   application. Poll to `ready`. The orchestrator's `OnReady` hook
+   activates the JWT middleware in-place — no Pod restart required.
+7. **Remove the allowlist** once `install_state = ready`; auth is
+   active and the Service is now safe to expose.
 
 ## Files
 
@@ -94,7 +84,3 @@ kubectl apply -f docs/examples/deploy/kubernetes/
   single-flight guard, so scaling up during the install window is
   unsafe. Scale up after `install_state = ready`. Restate will lift
   this restriction in a later slice.
-- **Restart required to enable auth.** The JWT middleware is wired at
-  startup; after `/install` completes, one `kubectl rollout restart`
-  turns it on. This ceremony happens once in the life of the
-  workspace.
