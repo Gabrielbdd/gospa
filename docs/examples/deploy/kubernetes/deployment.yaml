@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gospa
+  labels:
+    app.kubernetes.io/name: gospa
+    app.kubernetes.io/component: app
+spec:
+  # Install orchestrator uses an in-process single-flight guard, so run
+  # one replica until the workspace is installed. Scaling up after
+  # install is safe for regular traffic; revisit when Restate is wired in.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gospa
+      app.kubernetes.io/component: app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gospa
+        app.kubernetes.io/component: app
+    spec:
+      containers:
+        - name: gospa
+          image: ghcr.io/gabrielbdd/gospa:edge
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            # Hard startup contract: cmd/app refuses to start unless the
+            # file pointed to by this env var is a non-empty PAT.
+            - name: GOSPA_ZITADEL_PROVISIONER_PAT_FILE
+              value: /etc/gospa/zitadel/provisioner.pat
+            # Workspace DSN. Replace with your managed Postgres URL or
+            # an in-cluster database address.
+            - name: GOFRA_DATABASE__DSN
+              value: "postgres://gospa:gospa@postgres:5432/gospa?sslmode=disable"
+          volumeMounts:
+            - name: zitadel-pat
+              mountPath: /etc/gospa/zitadel
+              readOnly: true
+          startupProbe:
+            httpGet:
+              path: /startupz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: zitadel-pat
+          secret:
+            secretName: gospa-zitadel-provisioner
+            items:
+              - key: pat
+                path: provisioner.pat
+                mode: 0400
