@@ -3,9 +3,12 @@ module github.com/Gabrielbdd/gospa
 go 1.25.0
 
 require (
+	connectrpc.com/connect v1.18.1
 	github.com/Gabrielbdd/gofra v0.1.3-0.20260419030346-bbb9d890e71d
 	github.com/go-chi/chi/v5 v5.2.5
+	github.com/jackc/pgx/v5 v5.9.1
 	github.com/spf13/pflag v1.0.10
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
@@ -21,7 +24,6 @@ require (
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.9.1 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/knadh/koanf/maps v0.1.2 // indirect
 	github.com/knadh/koanf/parsers/yaml v1.1.0 // indirect

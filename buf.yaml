@@ -1,0 +1,16 @@
+version: v2
+modules:
+  - path: proto
+    excludes:
+      # proto/gospa/config/v1/config.proto is owned by `gofra generate
+      # config`, not buf. It imports Gofra-private annotations that buf
+      # cannot resolve and its Go/TS output is generated separately.
+      - proto/gospa/config
+lint:
+  use:
+    - DEFAULT
+  except:
+    - PACKAGE_VERSION_SUFFIX
+breaking:
+  use:
+    - FILE

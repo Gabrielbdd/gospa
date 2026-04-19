@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+package gospa.install.v1;
+
+// InstallService drives the one-shot MSP onboarding wizard. The routes
+// behind it are intentionally public (no auth required) because /install
+// runs before any user exists. Operators are responsible for keeping the
+// /install endpoint off public ingress until the workspace is ready.
+service InstallService {
+  // GetStatus returns the current install state of the singleton workspace.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  // Install transitions the workspace out of not_initialized and starts
+  // the provisioning pipeline. Idempotent-ish: returns FailedPrecondition
+  // when already ready or currently provisioning.
+  rpc Install(InstallRequest) returns (InstallResponse);
+}
+
+enum InstallState {
+  INSTALL_STATE_UNSPECIFIED = 0;
+  INSTALL_STATE_NOT_INITIALIZED = 1;
+  INSTALL_STATE_PROVISIONING = 2;
+  INSTALL_STATE_READY = 3;
+  INSTALL_STATE_FAILED = 4;
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  InstallState state = 1;
+  // Populated when state == FAILED.
+  string install_error = 2;
+  // Populated when state == READY.
+  string zitadel_org_id = 3;
+}
+
+// InitialUser captures the first human admin to create in the MSP org.
+message InitialUser {
+  string email = 1;
+  string given_name = 2;
+  string family_name = 3;
+}
+
+message InstallRequest {
+  string workspace_name = 1;
+  string workspace_slug = 2;
+  string timezone = 3;
+  string currency_code = 4;
+  InitialUser initial_user = 5;
+}
+
+message InstallResponse {
+  // Returned state at the moment POST /install accepts the request.
+  // Typically PROVISIONING. Clients poll GetStatus until READY or FAILED.
+  InstallState state = 1;
+}

@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package gospa.companies.v1;
+
+// CompaniesService manages the MSP's customer companies. Each company maps
+// eagerly to a ZITADEL organization; creating a company implies creating
+// its org and persisting the zitadel_org_id on the company row. If org
+// creation fails, the company row is not persisted.
+service CompaniesService {
+  rpc CreateCompany(CreateCompanyRequest) returns (CreateCompanyResponse);
+  rpc ListCompanies(ListCompaniesRequest) returns (ListCompaniesResponse);
+  rpc ArchiveCompany(ArchiveCompanyRequest) returns (ArchiveCompanyResponse);
+}
+
+message Company {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string zitadel_org_id = 4;
+  string created_at = 5; // RFC3339
+  string archived_at = 6; // RFC3339, empty when active
+}
+
+message CreateCompanyRequest {
+  string name = 1;
+  string slug = 2;
+}
+
+message CreateCompanyResponse {
+  Company company = 1;
+}
+
+message ListCompaniesRequest {}
+
+message ListCompaniesResponse {
+  repeated Company companies = 1;
+}
+
+message ArchiveCompanyRequest {
+  string id = 1;
+}
+
+message ArchiveCompanyResponse {}

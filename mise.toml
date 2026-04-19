@@ -26,6 +26,12 @@ run = "sqlc generate"
 sources = ["db/queries/*.sql", "db/migrations/*.sql", "sqlc.yaml"]
 outputs = ["db/sqlc/*.go"]
 
+[tasks."gen:proto"]
+description = "Generate Go + TS code from RPC .proto files via buf"
+run = "buf generate"
+sources = ["proto/**/*.proto", "buf.gen.yaml", "buf.yaml"]
+outputs = ["gen/**/*.go"]
+
 [tasks.dev]
 description = "Generate and start the backend"
 depends = ["generate"]
