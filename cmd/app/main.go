@@ -26,6 +26,7 @@ import (
 	"github.com/Gabrielbdd/gospa/internal/authgate"
 	"github.com/Gabrielbdd/gospa/internal/companies"
 	"github.com/Gabrielbdd/gospa/internal/install"
+	"github.com/Gabrielbdd/gospa/internal/installtoken"
 	"github.com/Gabrielbdd/gospa/internal/publicconfig"
 	"github.com/Gabrielbdd/gospa/internal/zitadel"
 	"github.com/Gabrielbdd/gospa/web"
@@ -72,6 +73,15 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("zitadel provisioner PAT loaded")
+
+	// --- Install token (bootstrap secret for /install) ---------------------
+
+	installSecret, installSecretSrc, err := installtoken.Load()
+	if err != nil {
+		slog.Error("install token unavailable; refusing to start", "error", err)
+		os.Exit(1)
+	}
+	logInstallTokenSource(installSecret, installSecretSrc)
 
 	// --- Database -----------------------------------------------------------
 
@@ -133,6 +143,7 @@ func main() {
 		Orchestrator: installOrchestrator,
 		Logger:       slog.Default(),
 		APIBaseURL:   cfg.Public.APIBaseURL,
+		InstallToken: installSecret,
 	}
 	companiesHandler := &companies.Handler{
 		Queries: queries,
@@ -227,6 +238,28 @@ func main() {
 	}); err != nil {
 		slog.Error("server stopped with error", "error", err)
 		os.Exit(1)
+	}
+}
+
+// logInstallTokenSource emits a startup line that an operator can use to
+// find the install token. For env/file sources it confirms the path so a
+// silent misload (file points at the wrong copy) is visible. For the
+// generated fallback it prints the literal token to stdout because that
+// is the only place an operator can find it — restart regenerates it.
+func logInstallTokenSource(token string, src installtoken.Source) {
+	switch src {
+	case installtoken.SourceLiteralEnv:
+		slog.Info("install token loaded from env", "var", installtoken.EnvLiteral)
+	case installtoken.SourceFile:
+		slog.Info("install token loaded from file", "path", os.Getenv(installtoken.EnvFile))
+	case installtoken.SourceGenerated:
+		slog.Warn(
+			"install token generated in-process (not persisted across restarts) — paste it into the /install wizard",
+			"token", token,
+			"persist_hint", "set "+installtoken.EnvFile+" or "+installtoken.EnvLiteral+" to keep it stable",
+		)
+	default:
+		slog.Warn("install token loaded from unknown source")
 	}
 }
 

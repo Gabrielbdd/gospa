@@ -72,12 +72,14 @@ function InstallPage() {
   }, [statusQuery.data?.state]);
 
   const installMutation = useMutation({
-    mutationFn: (req: InstallRequest) => install(req),
+    mutationFn: (vars: { req: InstallRequest; token: string }) =>
+      install(vars.req, vars.token),
     onSuccess: () => setSubmitted(true),
   });
 
   const form = useForm({
     defaultValues: {
+      installToken: "",
       workspaceName: "",
       workspaceSlug: "",
       timezone: DEFAULT_TIMEZONE,
@@ -88,15 +90,18 @@ function InstallPage() {
     },
     onSubmit: async ({ value }) => {
       installMutation.mutate({
-        workspaceName: value.workspaceName,
-        workspaceSlug: value.workspaceSlug,
-        timezone: value.timezone,
-        currencyCode: value.currencyCode,
-        initialUser: {
-          email: value.email,
-          givenName: value.givenName,
-          familyName: value.familyName,
+        req: {
+          workspaceName: value.workspaceName,
+          workspaceSlug: value.workspaceSlug,
+          timezone: value.timezone,
+          currencyCode: value.currencyCode,
+          initialUser: {
+            email: value.email,
+            givenName: value.givenName,
+            familyName: value.familyName,
+          },
         },
+        token: value.installToken.trim(),
       });
     },
   });
@@ -122,6 +127,24 @@ function InstallPage() {
             void form.handleSubmit();
           }}
         >
+          <form.Field name="installToken">
+            {(field) => (
+              <Field
+                label="Install token"
+                hint="Local dev: cat .secrets/install-token. Production: copy from container logs (search for 'install token')."
+              >
+                <input
+                  className={inputClass}
+                  value={field.state.value}
+                  onChange={(e) => field.handleChange(e.target.value)}
+                  required
+                  autoComplete="off"
+                  spellCheck={false}
+                  autoFocus
+                />
+              </Field>
+            )}
+          </form.Field>
           <form.Field name="workspaceName">
             {(field) => (
               <Field label="Workspace name">
@@ -130,7 +153,6 @@ function InstallPage() {
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
                   required
-                  autoFocus
                 />
               </Field>
             )}
@@ -239,10 +261,12 @@ function InstallPage() {
 function SecurityBanner() {
   return (
     <div className="rounded-md border border-warning bg-warning/10 p-3 text-sm text-warning-foreground">
-      <strong className="font-semibold">This flow is not authenticated.</strong>{" "}
-      Confirm the Gospa URL is not publicly reachable before completing
-      install — this MVP has no install key. Put the service behind a
-      private ingress or VPN during setup.
+      <strong className="font-semibold">Bootstrap-only flow.</strong>{" "}
+      The install endpoint requires an operator-supplied token and runs
+      before any user exists — keep it behind a private ingress until
+      <code className="mx-1 rounded bg-background/50 px-1">install_state = ready</code>
+      anyway. The token field below proves you control this Gospa
+      instance.
     </div>
   );
 }

@@ -26,6 +26,7 @@ fi
 # $0 in a sourced script is the calling shell, not the script path.
 # Mise tasks always run from the project root, so $PWD is the right anchor.
 : "${GOSPA_ZITADEL_PROVISIONER_PAT_FILE:=$PWD/.secrets/zitadel-provisioner.pat}"
+: "${GOSPA_INSTALL_TOKEN_FILE:=$PWD/.secrets/install-token}"
 
 default_database_url="postgres://${GOFRA_DB_USER}:${GOFRA_DB_PASSWORD}@${GOFRA_DB_HOST}:${GOFRA_DB_PORT}/${GOFRA_DB_NAME}?sslmode=${GOFRA_DB_SSLMODE}"
 : "${DATABASE_URL:=$default_database_url}"
@@ -43,5 +44,6 @@ export GOSPA_ZITADEL_PORT
 export GOSPA_ZITADEL_EXTERNAL_DOMAIN
 export GOSPA_ZITADEL_MASTERKEY
 export GOSPA_ZITADEL_PROVISIONER_PAT_FILE
+export GOSPA_INSTALL_TOKEN_FILE
 export DATABASE_URL
 export GOFRA_DATABASE__DSN

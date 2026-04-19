@@ -38,6 +38,12 @@ Follow the startup:
 docker compose --env-file compose.env logs -f app
 ```
 
+Look for a line starting with `install token generated in-process` —
+the `token=` field is what the wizard at `/install` will ask for.
+Copy it once. (Restarting the container regenerates it; set
+`GOSPA_INSTALL_TOKEN` in `compose.env` to a fixed value if you need
+the token to survive restarts.)
+
 Check it is responding:
 
 ```bash

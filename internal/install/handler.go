@@ -10,19 +10,37 @@ import (
 
 	installv1 "github.com/Gabrielbdd/gospa/gen/gospa/install/v1"
 	"github.com/Gabrielbdd/gospa/gen/gospa/install/v1/installv1connect"
+	"github.com/Gabrielbdd/gospa/internal/installtoken"
 )
+
+// InstallTokenHeader is the HTTP header the SPA sets on POST /install
+// with the operator-supplied bootstrap secret.
+const InstallTokenHeader = "X-Install-Token"
+
+// OrchestratorRunner is the narrow surface Handler needs from the
+// install orchestrator. Defined as an interface so tests can stub it
+// without standing up a ZITADEL client.
+type OrchestratorRunner interface {
+	Run(ctx context.Context, input Input) error
+}
 
 // Handler implements the InstallService Connect RPCs.
 type Handler struct {
 	installv1connect.UnimplementedInstallServiceHandler
 
 	Queries      Queries
-	Orchestrator *Orchestrator
+	Orchestrator OrchestratorRunner
 	Logger       *slog.Logger
 
 	// APIBaseURL is forwarded into the orchestrator Input so OIDC app
 	// redirect URIs resolve against the same base the SPA uses.
 	APIBaseURL string
+
+	// InstallToken is the expected value of the InstallTokenHeader on
+	// POST /install. Loaded by cmd/app at startup. Empty means the
+	// install endpoint is open — refuse to construct a Handler in that
+	// state to make the misconfiguration loud.
+	InstallToken string
 
 	mu       sync.Mutex
 	inflight bool
@@ -51,7 +69,18 @@ func (h *Handler) GetStatus(ctx context.Context, _ *connect.Request[installv1.Ge
 // Install accepts the wizard submission, flips the workspace to
 // provisioning, and spawns the orchestrator goroutine. It returns
 // immediately; the client polls GetStatus.
+//
+// Requires the X-Install-Token header to match the operator-supplied
+// secret; without it the endpoint would be a public bootstrap door.
 func (h *Handler) Install(ctx context.Context, req *connect.Request[installv1.InstallRequest]) (*connect.Response[installv1.InstallResponse], error) {
+	provided := req.Header().Get(InstallTokenHeader)
+	if !installtoken.Equal(provided, h.InstallToken) {
+		return nil, connect.NewError(
+			connect.CodeUnauthenticated,
+			errors.New("missing or invalid "+InstallTokenHeader+" header"),
+		)
+	}
+
 	if err := validateInstallRequest(req.Msg); err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}

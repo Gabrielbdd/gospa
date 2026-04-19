@@ -35,6 +35,20 @@ spec:
             - name: GOSPA_ZITADEL_PROVISIONER_PAT_FILE
               value: /etc/gospa/zitadel/provisioner.pat
 
+            # --- Install token (bootstrap secret) ----------------------
+            # Required in the X-Install-Token header on POST /install.
+            # Without it, /install rejects requests with Unauthenticated.
+            # If neither this env nor GOSPA_INSTALL_TOKEN_FILE is set,
+            # cmd/app generates a token at startup and logs it — fine
+            # for try-it-out, unsuitable for any persistent deploy
+            # because a Pod restart invalidates the previously issued
+            # token.
+            - name: GOSPA_INSTALL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gospa-install-token
+                  key: token
+
             # --- ZITADEL the app provisions into -----------------------
             # The admin URL the /install orchestrator hits to create the
             # MSP org, project, and OIDC SPA application. Post-install,

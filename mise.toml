@@ -75,13 +75,25 @@ wait
 """
 
 [tasks.infra]
-description = "Start local infrastructure (PostgreSQL + ZITADEL), wait, and materialise the provisioner PAT"
+description = "Start local infrastructure (PostgreSQL + ZITADEL), wait, materialise the provisioner PAT, and generate the install token"
 run = """
 . ./scripts/load-env.sh
 sh ./scripts/compose.sh up -d
 sh ./scripts/wait-for-postgres.sh
 sh ./scripts/wait-for-zitadel.sh
 sh ./scripts/copy-provisioner-pat.sh
+sh ./scripts/generate-install-token.sh
+"""
+
+[tasks."install:token"]
+description = "Print the install token for the local Gospa instance (paste into the /install wizard)"
+run = """
+. ./scripts/load-env.sh
+if [ ! -s "$GOSPA_INSTALL_TOKEN_FILE" ]; then
+  printf >&2 'install token not found at %s — run `mise run infra` first\\n' "$GOSPA_INSTALL_TOKEN_FILE"
+  exit 1
+fi
+cat "$GOSPA_INSTALL_TOKEN_FILE"
 """
 
 [tasks."infra:stop"]
@@ -92,11 +104,12 @@ sh ./scripts/compose.sh down --remove-orphans
 """
 
 [tasks."infra:reset"]
-description = "Stop infrastructure services, delete data volumes, and wipe the materialised provisioner PAT"
+description = "Stop infrastructure services, delete data volumes, and wipe materialised secrets (PAT + install token)"
 run = """
 . ./scripts/load-env.sh
 sh ./scripts/compose.sh down --volumes --remove-orphans
 rm -f .secrets/zitadel-provisioner.pat
+rm -f .secrets/install-token
 # The old bind-mount location from pre-fix checkouts. Safe to remove
 # repeatedly; does nothing when the directory is already gone.
 rm -rf .secrets/zitadel-provisioner-raw

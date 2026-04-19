@@ -36,13 +36,18 @@ export interface InstallResponse {
 
 const INSTALL_SERVICE = "/gospa.install.v1.InstallService";
 
+// INSTALL_TOKEN_HEADER must mirror install.InstallTokenHeader on the
+// Go side. Renaming one without the other silently breaks /install.
+export const INSTALL_TOKEN_HEADER = "X-Install-Token";
+
 async function callRPC<Req, Resp>(
   method: string,
   body: Req,
+  extraHeaders?: Record<string, string>,
 ): Promise<Resp> {
   const res = await fetch(`${INSTALL_SERVICE}/${method}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(extraHeaders ?? {}) },
     body: JSON.stringify(body ?? {}),
   });
   if (!res.ok) {
@@ -56,8 +61,13 @@ export async function getStatus(): Promise<GetStatusResponse> {
   return callRPC<Record<string, never>, GetStatusResponse>("GetStatus", {});
 }
 
-export async function install(req: InstallRequest): Promise<InstallResponse> {
-  return callRPC<InstallRequest, InstallResponse>("Install", req);
+export async function install(
+  req: InstallRequest,
+  installToken: string,
+): Promise<InstallResponse> {
+  return callRPC<InstallRequest, InstallResponse>("Install", req, {
+    [INSTALL_TOKEN_HEADER]: installToken,
+  });
 }
 
 export function isTerminal(state: InstallState): boolean {
