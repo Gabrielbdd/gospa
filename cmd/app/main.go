@@ -32,21 +32,26 @@ import (
 	"github.com/Gabrielbdd/gospa/web"
 )
 
-// workspaceOrgProvider adapts sqlc.Queries.GetWorkspace to the
-// publicconfig.WorkspaceOrgIDProvider interface.
-type workspaceOrgProvider struct {
+// workspaceAuthProvider adapts sqlc.Queries.GetWorkspace to the
+// publicconfig.WorkspaceAuthProvider interface so the browser receives
+// the ZITADEL org ID and the real OIDC SPA client ID after install.
+type workspaceAuthProvider struct {
 	queries *sqlc.Queries
 }
 
-func (p workspaceOrgProvider) WorkspaceOrgID(ctx context.Context) (string, error) {
+func (p workspaceAuthProvider) WorkspaceAuth(ctx context.Context) (publicconfig.WorkspaceAuth, error) {
 	ws, err := p.queries.GetWorkspace(ctx)
 	if err != nil {
-		return "", err
+		return publicconfig.WorkspaceAuth{}, err
 	}
-	if !ws.ZitadelOrgID.Valid {
-		return "", nil
+	out := publicconfig.WorkspaceAuth{}
+	if ws.ZitadelOrgID.Valid {
+		out.OrgID = ws.ZitadelOrgID.String
 	}
-	return ws.ZitadelOrgID.String, nil
+	if ws.ZitadelSpaClientID.Valid {
+		out.ClientID = ws.ZitadelSpaClientID.String
+	}
+	return out, nil
 }
 
 // provisionerPATEnv overrides zitadel.provisioner_pat_file from the config.
@@ -203,7 +208,7 @@ func main() {
 	// /_gofra/config.js is served by the publicconfig wrapper so the
 	// browser receives auth.orgId from the workspace singleton. The SPA
 	// uses that field to scope its OIDC login request to the MSP org.
-	app.Handle(runtimeconfig.DefaultPath, publicconfig.Handler(cfg, workspaceOrgProvider{queries: queries}))
+	app.Handle(runtimeconfig.DefaultPath, publicconfig.Handler(cfg, workspaceAuthProvider{queries: queries}))
 
 	// Install service is mounted on the app router; auth middleware
 	// (when enabled) skips it because its procedures are registered
