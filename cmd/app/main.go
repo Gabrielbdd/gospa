@@ -136,6 +136,7 @@ func main() {
 	installOrchestrator := &install.Orchestrator{
 		Queries: queries,
 		Zitadel: zitadelClient,
+		Config:  cfg,
 		Logger:  slog.Default(),
 		OnReady: func(_ context.Context, projectID string) error {
 			// Detach from the request context — the install request has
@@ -171,6 +172,13 @@ func main() {
 			slog.Warn("workspace was stuck in provisioning; transitioned to failed so /install can retry")
 		}
 	}
+
+	// Read-repair: workspaces installed before the auth contract columns
+	// existed have NULL issuer/management/audience values. Fill them in
+	// from cfg + the existing project_id so subsequent runtime consumers
+	// (verifier, browser config) can read a populated contract. No-op
+	// for fresh, not-yet-installed, or fully-populated workspaces.
+	install.RepairAuthContract(ctx, queries, cfg, slog.Default())
 
 	// --- Health & Routing ---------------------------------------------------
 

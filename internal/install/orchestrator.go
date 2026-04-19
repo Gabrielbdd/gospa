@@ -10,8 +10,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/Gabrielbdd/gospa/config"
 	"github.com/Gabrielbdd/gospa/db/sqlc"
 	"github.com/Gabrielbdd/gospa/internal/zitadel"
+	"github.com/Gabrielbdd/gospa/internal/zitadelcontract"
 )
 
 // Queries is the subset of sqlc's generated interface the orchestrator and
@@ -22,6 +24,7 @@ type Queries interface {
 	MarkWorkspaceFailed(ctx context.Context, installError pgtype.Text) error
 	MarkWorkspaceReady(ctx context.Context) error
 	PersistZitadelIDs(ctx context.Context, arg sqlc.PersistZitadelIDsParams) error
+	RepairWorkspaceAuthContract(ctx context.Context, arg sqlc.RepairWorkspaceAuthContractParams) error
 }
 
 // Input captures the workspace and initial-admin fields the wizard
@@ -47,6 +50,7 @@ type Input struct {
 type Orchestrator struct {
 	Queries Queries
 	Zitadel zitadel.Client
+	Config  *config.Config
 	Logger  *slog.Logger
 
 	// OnReady, if set, runs after MarkWorkspaceReady succeeds. It
@@ -113,13 +117,21 @@ func (o *Orchestrator) Run(ctx context.Context, in Input) error {
 		return fail("create_oidc_app", err)
 	}
 
-	// Step 5: persist the four identifiers on the singleton row.
+	// Step 5: persist the seven-field auth contract on the singleton row.
+	// Identifiers come straight from the ZITADEL responses; the auth
+	// contract (issuer/management/audience) is derived once via the
+	// zitadelcontract helper so the orchestrator and the startup
+	// read-repair path agree on the rules.
 	log.InfoContext(ctx, "install step starting", "step", "persist_ids")
+	contract := zitadelcontract.DeriveFresh(o.Config, projectID)
 	if err := o.Queries.PersistZitadelIDs(ctx, sqlc.PersistZitadelIDsParams{
-		ZitadelOrgID:        pgtype.Text{String: orgResp.OrgID, Valid: true},
-		ZitadelProjectID:    pgtype.Text{String: projectID, Valid: true},
-		ZitadelSpaAppID:     pgtype.Text{String: appResp.AppID, Valid: true},
-		ZitadelSpaClientID:  pgtype.Text{String: appResp.ClientID, Valid: true},
+		ZitadelOrgID:         pgtype.Text{String: orgResp.OrgID, Valid: true},
+		ZitadelProjectID:     pgtype.Text{String: projectID, Valid: true},
+		ZitadelSpaAppID:      pgtype.Text{String: appResp.AppID, Valid: true},
+		ZitadelSpaClientID:   pgtype.Text{String: appResp.ClientID, Valid: true},
+		ZitadelIssuerUrl:     pgtype.Text{String: contract.IssuerURL, Valid: contract.IssuerURL != ""},
+		ZitadelManagementUrl: pgtype.Text{String: contract.ManagementURL, Valid: contract.ManagementURL != ""},
+		ZitadelApiAudience:   pgtype.Text{String: contract.APIAudience, Valid: contract.APIAudience != ""},
 	}); err != nil {
 		return fail("persist_ids", err)
 	}

@@ -14,12 +14,23 @@ type Querier interface {
 	ArchiveCompany(ctx context.Context, id pgtype.UUID) error
 	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
 	GetCompany(ctx context.Context, id pgtype.UUID) (Company, error)
+	// Column order intentionally matches the workspace table's column order
+	// (base columns from 00001, then the auth-contract columns added in
+	// 00003) so sqlc returns the canonical Workspace model rather than a
+	// query-specific row type.
 	GetWorkspace(ctx context.Context) (Workspace, error)
 	ListCompanies(ctx context.Context) ([]Company, error)
 	MarkWorkspaceFailed(ctx context.Context, installError pgtype.Text) error
 	MarkWorkspaceProvisioning(ctx context.Context, arg MarkWorkspaceProvisioningParams) error
 	MarkWorkspaceReady(ctx context.Context) error
 	PersistZitadelIDs(ctx context.Context, arg PersistZitadelIDsParams) error
+	// Idempotent fill-in for already-installed workspaces that pre-date the
+	// explicit auth contract columns. COALESCE keeps any persisted value
+	// and only writes the supplied default when the column is currently
+	// NULL. Pass pgtype.Text{Valid: false} for fields the caller cannot
+	// safely derive (e.g. audience when both cfg.Auth.Audience and
+	// workspace.zitadel_project_id are empty) and they will be left NULL.
+	RepairWorkspaceAuthContract(ctx context.Context, arg RepairWorkspaceAuthContractParams) error
 }
 
 var _ Querier = (*Queries)(nil)

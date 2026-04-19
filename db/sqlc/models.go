@@ -65,17 +65,20 @@ type Company struct {
 }
 
 type Workspace struct {
-	ID                 int16                 `json:"id"`
-	Name               string                `json:"name"`
-	Slug               string                `json:"slug"`
-	Timezone           string                `json:"timezone"`
-	CurrencyCode       string                `json:"currency_code"`
-	InstallState       WorkspaceInstallState `json:"install_state"`
-	InstallError       pgtype.Text           `json:"install_error"`
-	ZitadelOrgID       pgtype.Text           `json:"zitadel_org_id"`
-	ZitadelProjectID   pgtype.Text           `json:"zitadel_project_id"`
-	ZitadelSpaAppID    pgtype.Text           `json:"zitadel_spa_app_id"`
-	ZitadelSpaClientID pgtype.Text           `json:"zitadel_spa_client_id"`
-	CreatedAt          pgtype.Timestamptz    `json:"created_at"`
-	InitializedAt      pgtype.Timestamptz    `json:"initialized_at"`
+	ID                   int16                 `json:"id"`
+	Name                 string                `json:"name"`
+	Slug                 string                `json:"slug"`
+	Timezone             string                `json:"timezone"`
+	CurrencyCode         string                `json:"currency_code"`
+	InstallState         WorkspaceInstallState `json:"install_state"`
+	InstallError         pgtype.Text           `json:"install_error"`
+	ZitadelOrgID         pgtype.Text           `json:"zitadel_org_id"`
+	ZitadelProjectID     pgtype.Text           `json:"zitadel_project_id"`
+	ZitadelSpaAppID      pgtype.Text           `json:"zitadel_spa_app_id"`
+	ZitadelSpaClientID   pgtype.Text           `json:"zitadel_spa_client_id"`
+	CreatedAt            pgtype.Timestamptz    `json:"created_at"`
+	InitializedAt        pgtype.Timestamptz    `json:"initialized_at"`
+	ZitadelIssuerUrl     pgtype.Text           `json:"zitadel_issuer_url"`
+	ZitadelManagementUrl pgtype.Text           `json:"zitadel_management_url"`
+	ZitadelApiAudience   pgtype.Text           `json:"zitadel_api_audience"`
 }

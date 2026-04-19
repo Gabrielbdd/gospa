@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/Gabrielbdd/gospa/config"
 	"github.com/Gabrielbdd/gospa/db/sqlc"
 	"github.com/Gabrielbdd/gospa/internal/install"
 	"github.com/Gabrielbdd/gospa/internal/zitadel"
@@ -65,6 +66,21 @@ func (f *fakeQueries) PersistZitadelIDs(ctx context.Context, arg sqlc.PersistZit
 	return f.persistIDsErr
 }
 
+// RepairWorkspaceAuthContract is part of the install.Queries interface
+// for the startup read-repair path. The orchestrator never calls it,
+// so the stub is a noop here; the cmd/app integration covers it
+// elsewhere.
+func (f *fakeQueries) RepairWorkspaceAuthContract(ctx context.Context, _ sqlc.RepairWorkspaceAuthContractParams) error {
+	return nil
+}
+
+func newConfig(issuer, audience, adminURL string) *config.Config {
+	return &config.Config{
+		Auth:    config.AuthConfig{Issuer: issuer, Audience: audience},
+		Zitadel: config.ZitadelConfig{AdminAPIURL: adminURL},
+	}
+}
+
 // fakeZitadel captures calls and serves configurable responses/errors.
 type fakeZitadel struct {
 	setUpOrgResp   zitadel.SetUpOrgResponse
@@ -116,7 +132,7 @@ func newInput() install.Input {
 	}
 }
 
-func TestOrchestrator_Run_HappyPath_PersistsAllIDsAndMarksReady(t *testing.T) {
+func TestOrchestrator_Run_HappyPath_PersistsAllSevenFieldsAndMarksReady(t *testing.T) {
 	q := &fakeQueries{}
 	z := &fakeZitadel{
 		setUpOrgResp:   zitadel.SetUpOrgResponse{OrgID: "org-1", UserID: "user-1"},
@@ -127,6 +143,7 @@ func TestOrchestrator_Run_HappyPath_PersistsAllIDsAndMarksReady(t *testing.T) {
 	o := install.Orchestrator{
 		Queries: q,
 		Zitadel: z,
+		Config:  newConfig("https://issuer.example.com", "", "https://admin.example.com"),
 		Logger:  newLogger(),
 		OnReady: func(_ context.Context, projectID string) error {
 			onReadyProject = projectID
@@ -154,17 +171,52 @@ func TestOrchestrator_Run_HappyPath_PersistsAllIDsAndMarksReady(t *testing.T) {
 	if want := "http://localhost:3000/auth/callback"; len(z.addOIDCReq.RedirectURIs) == 0 || z.addOIDCReq.RedirectURIs[0] != want {
 		t.Errorf("redirect URIs = %v; want [%q]", z.addOIDCReq.RedirectURIs, want)
 	}
+	// All 7 auth-contract fields must land on the singleton row.
 	if q.persistedIDs.ZitadelOrgID.String != "org-1" ||
 		q.persistedIDs.ZitadelProjectID.String != "proj-1" ||
 		q.persistedIDs.ZitadelSpaAppID.String != "app-1" ||
 		q.persistedIDs.ZitadelSpaClientID.String != "cli-1" {
-		t.Errorf("persisted IDs incorrect: %+v", q.persistedIDs)
+		t.Errorf("persisted identifiers incorrect: %+v", q.persistedIDs)
+	}
+	if !q.persistedIDs.ZitadelIssuerUrl.Valid || q.persistedIDs.ZitadelIssuerUrl.String != "https://issuer.example.com" {
+		t.Errorf("persisted issuer = %+v; want https://issuer.example.com", q.persistedIDs.ZitadelIssuerUrl)
+	}
+	if !q.persistedIDs.ZitadelManagementUrl.Valid || q.persistedIDs.ZitadelManagementUrl.String != "https://admin.example.com" {
+		t.Errorf("persisted management = %+v; want https://admin.example.com", q.persistedIDs.ZitadelManagementUrl)
+	}
+	if !q.persistedIDs.ZitadelApiAudience.Valid || q.persistedIDs.ZitadelApiAudience.String != "proj-1" {
+		t.Errorf("persisted audience = %+v; want proj-1", q.persistedIDs.ZitadelApiAudience)
 	}
 	if !q.markedReady {
 		t.Error("expected workspace marked ready")
 	}
 	if q.markedFailedErr.Valid {
 		t.Errorf("unexpected failure mark: %+v", q.markedFailedErr)
+	}
+}
+
+func TestOrchestrator_Run_IssuerFallsBackToAdminAPIURLWhenAuthIssuerEmpty(t *testing.T) {
+	q := &fakeQueries{}
+	z := &fakeZitadel{
+		setUpOrgResp:   zitadel.SetUpOrgResponse{OrgID: "org-1"},
+		addProjectResp: "proj-1",
+		addOIDCResp:    zitadel.AddOIDCAppResponse{AppID: "app-1", ClientID: "cli-1"},
+	}
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		// cfg.Auth.Issuer intentionally empty — orchestrator should
+		// fall back to cfg.Zitadel.AdminAPIURL for the persisted issuer.
+		Config: newConfig("", "", "https://admin.example.com"),
+		Logger: newLogger(),
+	}
+
+	if err := o.Run(context.Background(), newInput()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if !q.persistedIDs.ZitadelIssuerUrl.Valid || q.persistedIDs.ZitadelIssuerUrl.String != "https://admin.example.com" {
+		t.Errorf("persisted issuer = %+v; want fallback to admin URL", q.persistedIDs.ZitadelIssuerUrl)
 	}
 }
 
@@ -210,7 +262,12 @@ func TestOrchestrator_Run_PersistFailureStopsBeforeReady(t *testing.T) {
 		addProjectResp: "p",
 		addOIDCResp:    zitadel.AddOIDCAppResponse{AppID: "a", ClientID: "c"},
 	}
-	o := install.Orchestrator{Queries: q, Zitadel: z, Logger: newLogger()}
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Config:  newConfig("", "", "https://admin.example.com"),
+		Logger:  newLogger(),
+	}
 
 	err := o.Run(context.Background(), newInput())
 	if err == nil {
