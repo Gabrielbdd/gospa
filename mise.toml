@@ -1,11 +1,13 @@
 [tools]
 go = "1.25"
+node = "22"
 
 [tasks.generate]
-description = "Generate config code from proto"
+description = "Generate config code (Go + TS) from proto"
 run = """
 GOWORK=off GOFLAGS=-mod=mod go run github.com/Gabrielbdd/gofra/cmd/gofra generate config \
   -runtime github.com/Gabrielbdd/gofra/runtime/config \
+  -ts-out web/src/gen \
   proto/gospa/config/v1/config.proto
 GOWORK=off go mod tidy
 """
@@ -15,9 +17,25 @@ description = "Run the application test suite"
 depends = ["generate"]
 run = "go test ./..."
 
-[tasks.build]
-description = "Build the application binary"
+[tasks."web:install"]
+description = "Install frontend dependencies"
+run = "cd web && npm install"
+sources = ["web/package.json"]
+outputs = ["web/node_modules/.package-lock.json"]
+
+[tasks."web:dev"]
+description = "Start Vite dev server at :5173 (run alongside `mise run dev` in another terminal)"
 depends = ["generate"]
+run = "cd web && npm install && npm run dev"
+
+[tasks."web:build"]
+description = "Build the frontend into web/dist so the Go binary can embed it"
+depends = ["generate"]
+run = "cd web && npm install && npm run build"
+
+[tasks.build]
+description = "Build the Go binary (embeds web/dist)"
+depends = ["generate", "web:build"]
 run = "go build -o bin/gospa ./cmd/app"
 
 [tasks."gen:sql"]

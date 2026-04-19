@@ -11,3 +11,4 @@ tmp/
 compose.yaml
 .vscode
 .idea
+web/node_modules
