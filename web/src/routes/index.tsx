@@ -9,7 +9,7 @@ import { rootRoute } from "@/routes/__root";
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  beforeLoad: async () => {
+  loader: async () => {
     const status = await getStatus();
     if (status.state !== "INSTALL_STATE_READY") {
       throw redirect({ to: "/install" });

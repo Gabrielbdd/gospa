@@ -17,7 +17,7 @@ import { rootRoute } from "@/routes/__root";
 export const installRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/install",
-  beforeLoad: async () => {
+  loader: async () => {
     const status = await getStatus();
     if (status.state === "INSTALL_STATE_READY") {
       throw redirect({ to: "/" });
