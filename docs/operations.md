@@ -39,9 +39,12 @@ at once:
 
 1. **Workspace row** now carries `zitadel_org_id`,
    `zitadel_project_id`, `zitadel_spa_app_id`, `zitadel_spa_client_id`.
-2. **Auth gate** (server-side middleware) flips from pass-through to
-   JWT-validating via `OnReady → gate.Activate`. Protected RPCs now
-   require a Bearer token.
+2. **Auth gate** (server-side middleware) flips from inactive to
+   JWT-validating via `OnReady → gate.Activate`. While inactive,
+   public Connect procedures (the install RPCs) and non-Connect
+   paths (assets, `/_gofra/config.js`) pass through; private app
+   RPCs already return 401 from the gate. After activation, every
+   private RPC additionally requires a valid Bearer token.
 3. **Public runtime config** served at `/_gofra/config.js` — which
    the browser already has loaded as a snapshot from page boot — is
    now *semantically* different: `auth.orgId` would return the new
@@ -110,11 +113,14 @@ Starting state: repo just cloned, no Docker volumes, no `.secrets/`.
 
 2. `mise run dev`:
    - `scripts/load-env.sh` sets `GOSPA_ZITADEL_PROVISIONER_PAT_FILE`
-     to the host PAT path.
-   - The Go binary reads the PAT, validates it is non-empty, runs
-     migrations (`workspace` + `companies` created), loads the
-     singleton workspace row (state = `not_initialized`), mounts the
-     auth gate in pass-through mode. Vite starts in parallel.
+     and `GOSPA_INSTALL_TOKEN_FILE` to the host paths.
+   - The Go binary reads the PAT (via `internal/patwatch`, which
+     keeps watching for rotation), reads the install token, runs
+     migrations (`workspace` + `companies` + auth-contract columns),
+     loads the singleton workspace row (state = `not_initialized`),
+     mounts the auth gate inactive (public install RPCs pass through;
+     private app RPCs would return 401 from the gate). Vite starts
+     in parallel.
 
 3. Browser to `http://localhost:3000`:
    - TanStack Router calls `GetStatus`, sees `not_initialized`,
@@ -235,26 +241,37 @@ Starting state: you were at `/install`, hit submit, and killed
 ### Scenario F — PAT rotated manually in the ZITADEL console
 
 Starting state: you generated a new PAT in ZITADEL's UI and revoked
-the old one. The app is still holding the old token.
+the old one. The app is still holding the old token in memory until
+the watcher catches the file change.
 
 Symptoms:
 
     create_org: zitadel SetUpOrg: zitadel returned 401 Unauthorized
     # or similar on company creation
 
-**Recovery paths:**
+**Recovery (no restart required since S10):**
 
-- **Easy:** `mise run infra:reset && mise run infra && mise run dev`
-  — lose everything, start over. Fine in dev.
-- **Targeted:** write the new token directly to the host PAT file:
+Just write the new token to the host PAT file:
 
-      echo -n "$NEW_PAT" > .secrets/zitadel-provisioner.pat
-      chmod 600 .secrets/zitadel-provisioner.pat
+    echo -n "$NEW_PAT" > .secrets/zitadel-provisioner.pat
+    chmod 600 .secrets/zitadel-provisioner.pat
 
-  Then restart `mise run dev`. ZITADEL's container still has the
-  FirstInstance PAT in its volume, so the next `mise run infra` would
-  overwrite with that — avoid running `infra` until you're done with
-  the manual PAT.
+`internal/patwatch` observes the parent directory, detects the WRITE
+event, and reloads the value into memory atomically. The next ZITADEL
+call uses the new token. Logs show `patwatch: PAT reloaded`.
+
+Caveats:
+
+- ZITADEL's container still has the FirstInstance PAT in its volume,
+  so the next `mise run infra` would overwrite with that. Avoid
+  running `infra` until you are done with the manual PAT, or accept
+  that infra will roll you back to the bootstrap value.
+- If the new file is briefly empty during the write (e.g. truncate
+  then write), the watcher keeps the previous PAT (last-known-good)
+  and logs a warning. Runtime never sees an empty bearer.
+- Restart (`mise run dev` again) is no longer required and only
+  exists as a fallback if you want to force-reset the process for
+  unrelated reasons.
 
 ### Scenario G — ZITADEL image version change
 
@@ -304,9 +321,11 @@ Starting state: brand-new cluster namespace, no workspace row yet.
    `GOFRA_ZITADEL__ADMIN_API_URL`, `GOFRA_PUBLIC__API_BASE_URL`,
    `GOFRA_PUBLIC__AUTH__ISSUER`.
 3. `kubectl apply -f docs/examples/deploy/kubernetes/`. Pod starts,
-   validates the PAT file, runs migrations on the managed DB,
-   workspace row starts `not_initialized`, auth gate is
-   pass-through. Probes flip to ready.
+   validates the PAT file (and starts watching it via patwatch),
+   reads the install token from the Secret, runs migrations on the
+   managed DB, workspace row starts `not_initialized`, auth gate is
+   inactive (public install RPCs reachable; private RPCs already
+   401 from the gate). Probes flip to ready.
 4. Operator **restricts Ingress** to their own IP / VPN / port-forward.
 5. Operator opens the URL, fills the wizard. Orchestrator provisions
    ZITADEL resources. `OnReady` activates the auth gate **in-place**
@@ -331,10 +350,18 @@ Starting state: operator submitted the wizard, the pod died before
 `MarkWorkspaceReady` (node failure, OOMKill, whatever).
 
 - New pod boots, detects `install_state = provisioning`, auto-
-  transitions to `failed` with a recovery note, and continues
-  serving in pass-through.
-- Operator retries the wizard. Same caveat as Scenario E about
-  orphaned ZITADEL orgs.
+  transitions to `failed` with a recovery note. The auth gate stays
+  inactive (still pre-install from its perspective) so the operator
+  can retry the wizard; private app RPCs continue to 401 from the
+  gate.
+- **Caveat** (different from Scenario E): the in-flow cleanup that
+  S15 added only runs when the orchestrator's own `fail` helper is
+  reached. A pod death between `SetUpOrg` and the next step
+  bypasses `fail` entirely — the org id is lost with the process.
+  The wizard retry creates a fresh org; the previous one stays
+  orphaned in ZITADEL until the operator removes it manually. This
+  is the remaining gap that needs Restate (or persisting the
+  in-flight org id before the ZITADEL call).
 
 ### Scenario K4 — PAT rotation
 

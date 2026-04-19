@@ -29,10 +29,14 @@ for update, stop, tuning, caveats, and the `linux/arm64`-only note.
 > not run it as production. Real deployment guides will ship with the
 > Gospa documentation site.
 
-Gospa is still early bootstrap, so <http://localhost:3000> today shows
-only the framework starter's placeholder page — not the PSA product
-described in the [product blueprint](docs/blueprint/index.md). The
-sections below document local development against the source.
+Gospa is still early bootstrap. <http://localhost:3000> today walks
+you through the `/install` wizard (operator-supplied install token,
+admin password, ZITADEL provisioning), then renders a tiny home page
+with sign-in / sign-out and a "Companies probe" panel that exercises
+an authenticated RPC end-to-end. The PSA product itself
+(tickets, time tracking, billing, etc., described in the
+[product blueprint](docs/blueprint/index.md)) is still future work
+— the sections below document local development against the source.
 
 ## Current Scope
 
@@ -68,9 +72,12 @@ Today the app provides:
 Config fields, defaults, and descriptions are defined once in the proto file.
 Run `mise run generate` after editing the proto to regenerate the Go code.
 
-Known MVP debts (no install key, single PAT for bootstrap + runtime,
-no authz yet, Restate deferred, single-replica install) are recorded
-in [`docs/blueprint/index.md` § Apêndice C](docs/blueprint/index.md#apêndice-c--mvp-debts-identidade--onboarding).
+Remaining MVP debts (single PAT keeps IAM_OWNER on both bootstrap
+and runtime paths even though rotation is now hot-reloaded, no authz
+yet, Restate deferred for kernel-kill mid-install recovery,
+single-replica install, companies handler still has no
+compensation when its post-org INSERT fails) are recorded in
+[`docs/blueprint/index.md` § Apêndice C](docs/blueprint/index.md#apêndice-c--mvp-debts-identidade--onboarding).
 
 [`docs/operations.md`](docs/operations.md) enumerates every dev and
 Kubernetes scenario explicitly — fresh clone, re-run, full reset,
@@ -122,8 +129,9 @@ The starter ships with these `mise` tasks:
 | `mise run build` | Build the application binary to `bin/gospa`. |
 | `mise run dev` | Start the backend locally (depends on `generate`). |
 | `mise run infra` | Start local infrastructure (Postgres + ZITADEL) via Compose and materialise the provisioner PAT. |
-| `mise run infra:stop` / `infra:reset` / `infra:logs` | Manage local infrastructure. `infra:reset` wipes the PAT and forces a fresh ZITADEL bootstrap on next `infra`. |
-| `mise run web:dev` | Start the Vite dev server on `:5173` (pair with `mise run dev`). |
+| `mise run infra:stop` / `infra:reset` / `infra:logs` | Manage local infrastructure. `infra:reset` wipes the PAT, the install token, and the ZITADEL data volume so the next `infra` starts from scratch. |
+| `mise run install:token` | Print the install token from `.secrets/install-token` so you can paste it into the `/install` wizard. |
+| `mise run web:dev` | Start the Vite dev server on `:5173` standalone — only needed when iterating on the frontend without the Go backend. `mise run dev` already starts both together. |
 | `mise run web:build` | Build the frontend into `web/dist` so the Go binary can embed it. |
 | `mise run migrate` / `migrate:create` / `migrate:down` / `migrate:status` | Manage database migrations via `goose`. |
 | `mise run seed` | Seed the database with development data. |

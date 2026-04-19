@@ -1,116 +1,55 @@
-# Quick-run Gospa with Docker Compose
+# Quick-run Docker Compose example for Gospa
 
-Run Gospa + PostgreSQL with two downloaded files and one command.
-
-> **This is not a production deployment.** It exists so you can try
-> Gospa in a minute without cloning the repo or building anything. It
-> uses default credentials, no TLS, no secrets management, no backups,
-> and rolling `:edge` images. Treat it as an evaluation harness for
-> your own laptop, nothing more.
+> **Status today: this example does not run standalone.**
 >
-> **Identity is not configured here.** The quickrun compose starts
-> only PostgreSQL and the Gospa binary — it does NOT launch ZITADEL
-> and does NOT materialise the provisioner PAT file that Gospa
-> requires at startup. The container will exit `1` on first boot
-> with a clear error about a missing PAT file. For a runnable local
-> setup, clone the repo and run `mise run infra` (which brings up
-> ZITADEL alongside Postgres and produces the PAT via the
-> `FirstInstance.PatPath` bootstrap). A future quickrun variant
-> that bundles ZITADEL will ship with the Gospa documentation site.
+> The `compose.yaml` in this directory only brings up PostgreSQL and
+> the Gospa binary. It does **not** bring up ZITADEL and does **not**
+> materialise the provisioner PAT file that Gospa requires at
+> startup. The container will exit `1` on first boot with a clear
+> error about a missing PAT file:
 >
-> This directory is a placeholder until Gospa has its own documentation
-> site with real deployment guides.
+>     ERROR zitadel provisioner PAT unavailable; refusing to start
+>
+> A self-contained quickrun that bundles ZITADEL + bootstraps the
+> PAT inside Compose is future work; it will land alongside the
+> Gospa documentation site.
 
-## Run
+## What to run instead, today
 
-```bash
-mkdir gospa-quickrun && cd gospa-quickrun
-
-wget https://raw.githubusercontent.com/Gabrielbdd/gospa/main/docs/examples/deploy/compose/compose.yaml
-wget https://raw.githubusercontent.com/Gabrielbdd/gospa/main/docs/examples/deploy/compose/compose.env
-
-docker compose --env-file compose.env up -d
-```
-
-Follow the startup:
+For a runnable local Gospa, clone the repository and use the
+in-repo `mise` workflow — which brings up Postgres **and** ZITADEL,
+materialises the provisioner PAT, generates the install token, and
+runs the app pointing at the right paths:
 
 ```bash
-docker compose --env-file compose.env logs -f app
+git clone https://github.com/Gabrielbdd/gospa.git
+cd gospa
+mise trust
+mise run infra            # Postgres + ZITADEL + PAT + install token
+mise run install:token    # prints the token to paste into the wizard
+mise run dev              # backend + Vite dev server
 ```
 
-Look for a line starting with `install token generated in-process` —
-the `token=` field is what the wizard at `/install` will ask for.
-Copy it once. (Restarting the container regenerates it; set
-`GOSPA_INSTALL_TOKEN` in `compose.env` to a fixed value if you need
-the token to survive restarts.)
+Then visit <http://localhost:3000>. See the top-level
+[`README.md`](../../../../README.md) and [`docs/operations.md`](../../../operations.md)
+for the rest of the local-dev surface (reset, logs, scenarios for
+restart and rotation, and the `/install` wizard walk-through).
 
-Check it is responding:
+## Why the artifact is kept in the repo
 
-```bash
-curl http://localhost:3000/readyz              # 200 when Postgres is reachable
-curl http://localhost:3000/livez               # 200 while the process runs
-curl http://localhost:3000/_gofra/config.js    # browser-safe runtime config
-```
-
-Visit <http://localhost:3000>.
-
-## Update
-
-```bash
-docker compose --env-file compose.env pull
-docker compose --env-file compose.env up -d
-```
-
-## Stop
-
-```bash
-docker compose --env-file compose.env down              # stop, keep Postgres data
-docker compose --env-file compose.env down --volumes    # stop, wipe Postgres data
-```
-
-## Tune
-
-Edit `compose.env` to override any of:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `GOSPA_IMAGE` | `ghcr.io/gabrielbdd/gospa:edge` | Image tag. Pin to `:v0.1.0`, `:sha-...` from the [Packages page](https://github.com/Gabrielbdd/gospa/pkgs/container/gospa). |
-| `POSTGRES_IMAGE` | `postgres:18.3-alpine3.23` | PostgreSQL image. |
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | `postgres` / `postgres` / `gospa` | Database credentials. Defaults are insecure. |
-| `APP_PORT` | `3000` | Host port for the Gospa app. |
-
-The compose.yaml in this directory is self-contained — no other files
-are needed.
-
-## Platform
-
-`ghcr.io/gabrielbdd/gospa` is published for `linux/arm64` only in this
-iteration. Hosts running on `linux/amd64` will fail with
-"no matching manifest". For amd64, build from source with
-`docker build -t gospa .` in a gospa checkout; multi-arch publish is a
-follow-up.
-
-## First-time caveat
-
-The `edge` tag exists only after the publish workflow runs on `main`
-at least once. If `docker compose` fails with "manifest not found",
-pick a specific tag from the [Packages page] and set `GOSPA_IMAGE` in
-`compose.env` accordingly.
-
-## Status
-
-Gospa is in early bootstrap. <http://localhost:3000> today shows only
-the framework starter's placeholder page, not the PSA product
-described in the [product blueprint](../../../blueprint/index.md). Use
-this quickrun to validate the runtime contract (HTTP server, health
-probes, Postgres, auto-migrations, runtime config), not to evaluate
-product features.
+The `compose.yaml` and `compose.env` in this directory are checked
+in so that a future quickrun variant — once it is honest — can drop
+in here and the documentation links in the rest of the project keep
+pointing at the same path. The current files are not deleted to
+preserve that path stability and to make the gap obvious to anyone
+opening the directory.
 
 ## What replaces this
 
 When Gospa ships its own documentation site, real deployment guides
 will live there — covering TLS, secrets handling, auth, observability,
-backup, and minimal production-safe manifests. This directory will
-then go away or point at those guides.
-
-[Packages page]: https://github.com/Gabrielbdd/gospa/pkgs/container/gospa
+backup, and minimal production-safe manifests. For Kubernetes today,
+[`../kubernetes/README.md`](../kubernetes/README.md) is the
+already-coherent example: it documents the install token Secret,
+the patwatch-based PAT rotation contract, and the in-place auth gate
+activation that does not need `kubectl rollout restart`.

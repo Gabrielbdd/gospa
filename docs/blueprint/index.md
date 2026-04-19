@@ -743,34 +743,46 @@ criação eager da org no ZITADEL, e login com scope
 tomadas deliberadamente para caber no MVP e estão registradas aqui
 para não reabrirem sem contexto:
 
-- **Sem install key.** A rota `/install` aceita provisioning sem
-  autenticação. Quem controla a URL controla o bootstrap. Em deploy
-  remoto a mitigação é operacional: ingress privado, IP allowlist,
-  ou ambiente não exposto até concluir `/install`. O SPA mostra um
-  banner de aviso na própria tela. Install key é o próximo passo
-  natural — lands quando tivermos o primeiro reporte concreto de
-  deploy exposto por acidente.
+- **Install token operator-supplied (S3, gospa `f881f23`).**
+  `/install` agora exige o header `X-Install-Token` validado no
+  handler. O operador supre o token via `GOSPA_INSTALL_TOKEN` (env
+  literal) ou `GOSPA_INSTALL_TOKEN_FILE` (path); se nenhum estiver
+  setado, o app gera um e loga no startup pra cenários try-it-out
+  em container único. O SPA wizard pede o token como primeiro
+  campo. A dívida MVP de "sem install key" está fechada; o que
+  resta é a recomendação operacional de não expor `/install`
+  publicamente mesmo com o token.
 
-- **PAT único compartilhado entre bootstrap e runtime.** O PAT
-  gerado pelo `FirstInstance` do ZITADEL é usado tanto pelo
-  orchestrator inicial quanto pelos handlers que criam org por
-  company. Concentra privilégio em uma credencial sensível. Rotação
-  é manual: gerar novo PAT no ZITADEL, atualizar o Secret (ou
-  arquivo local via `mise run infra:reset`), rolar o Deployment.
-  Separação entre bootstrap e runtime, mais rotação automática, são
-  trabalhos futuros.
+- **PAT único compartilhado entre bootstrap e runtime, mas com
+  hot-reload (S10, gospa `454679a`).** O PAT gerado pelo
+  `FirstInstance` continua sendo usado tanto pelo orchestrator
+  inicial quanto pelos handlers de companies — concentração de
+  privilégio numa única credencial IAM_OWNER permanece. O que
+  mudou: rotação é in-place via `internal/patwatch`. O operador
+  edita o arquivo (ou Secret K8s) e o app pega o valor novo na
+  próxima request, sem restart, com semantics last-known-good. A
+  separação real bootstrap/runtime só vale a pena quando os
+  privilégios puderem divergir (ex: pool de orgs pré-alocadas pelo
+  operador), não só por separar arquivos. Adiada por isso.
 
 - **Sem authz pós-login.** Neste corte o ZITADEL resolve apenas
   authn — qualquer usuário autenticado passa as checagens. O modelo
   de permissões (papéis MSP × cliente) entra em slice próprio, com
   `runtime/authz` do Gofra como base.
 
-- **Restate deferido.** O orchestrator do `/install` é uma goroutine
-  single-flight com state machine mínima no banco. Não há retry
-  automático nem recuperação de crash no meio do provisioning; uma
-  queda durante `provisioning` deixa o workspace em `failed` com
-  erro legível, e `/install` aceita reentrada. Restate cobre isso
-  corretamente no slice de durability.
+- **Restate deferido para o caso kernel-kill (S15 cobriu in-flow,
+  gospa `6a9ecae`).** O orchestrator do `/install` é uma goroutine
+  single-flight com state machine mínima no banco. Falhas de step
+  dentro do `Run` (`AddProject`, `AddOIDCApp`, `PersistZitadelIDs`)
+  agora chamam `Zitadel.RemoveOrg` best-effort antes de
+  `MarkWorkspaceFailed` — ZITADEL faz cascade pra project + app, e
+  a wizard recriadora cria org novo sem deixar órfão. Falha do
+  próprio `RemoveOrg` é registrada em `install_error` e logada com
+  o `org_id`. O caso remanescente é **kernel-kill / SIGKILL / pod
+  evict mid-install**: o processo morre antes do `fail` rodar, o
+  org id se perde com o processo, e a org fica órfã até o operador
+  limpar. Restate (ou persistir o org id antes da chamada ZITADEL)
+  fecha esse último caso.
 
 - **Company → org eager sem compensação em falha pós-org.** Se a
   criação da org no ZITADEL suceder mas o insert na tabela
