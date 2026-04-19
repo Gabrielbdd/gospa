@@ -733,5 +733,56 @@ multi-stage, e GitHub Actions CI rodando testes + build da imagem.
 
 ---
 
-**Versão**: 1.2 — Blueprint rebranded para Gospa; seção de setup reflete o estado real pós-scaffold a partir do framework publicado.
-**Data**: 2026-04-18
+---
+
+## Apêndice C — MVP debts (identidade + onboarding)
+
+O corte atual entrega `/install`, workspace singleton, companies com
+criação eager da org no ZITADEL, e login com scope
+`urn:zitadel:iam:org:id:{workspaceOrgID}`. Algumas decisões foram
+tomadas deliberadamente para caber no MVP e estão registradas aqui
+para não reabrirem sem contexto:
+
+- **Sem install key.** A rota `/install` aceita provisioning sem
+  autenticação. Quem controla a URL controla o bootstrap. Em deploy
+  remoto a mitigação é operacional: ingress privado, IP allowlist,
+  ou ambiente não exposto até concluir `/install`. O SPA mostra um
+  banner de aviso na própria tela. Install key é o próximo passo
+  natural — lands quando tivermos o primeiro reporte concreto de
+  deploy exposto por acidente.
+
+- **PAT único compartilhado entre bootstrap e runtime.** O PAT
+  gerado pelo `FirstInstance` do ZITADEL é usado tanto pelo
+  orchestrator inicial quanto pelos handlers que criam org por
+  company. Concentra privilégio em uma credencial sensível. Rotação
+  é manual: gerar novo PAT no ZITADEL, atualizar o Secret (ou
+  arquivo local via `mise run infra:reset`), rolar o Deployment.
+  Separação entre bootstrap e runtime, mais rotação automática, são
+  trabalhos futuros.
+
+- **Sem authz pós-login.** Neste corte o ZITADEL resolve apenas
+  authn — qualquer usuário autenticado passa as checagens. O modelo
+  de permissões (papéis MSP × cliente) entra em slice próprio, com
+  `runtime/authz` do Gofra como base.
+
+- **Restate deferido.** O orchestrator do `/install` é uma goroutine
+  single-flight com state machine mínima no banco. Não há retry
+  automático nem recuperação de crash no meio do provisioning; uma
+  queda durante `provisioning` deixa o workspace em `failed` com
+  erro legível, e `/install` aceita reentrada. Restate cobre isso
+  corretamente no slice de durability.
+
+- **Company → org eager sem compensação em falha pós-org.** Se a
+  criação da org no ZITADEL suceder mas o insert na tabela
+  `companies` falhar, a org fica órfã. O handler loga o
+  `zitadel_org_id` em ERROR para permitir limpeza manual. Um Restate
+  saga cobrirá isso junto com o corte de durability.
+
+- **Sem compatibilidade com deploy Kubernetes multi-réplica durante
+  o install.** O orchestrator usa single-flight in-process; scaling
+  horizontal só é seguro depois que `install_state = ready`.
+
+---
+
+**Versão**: 1.3 — Apêndice C documenta as dívidas deliberadas do MVP de identidade/onboarding.
+**Data**: 2026-04-19

@@ -45,17 +45,32 @@ Today the app provides:
 - a runnable Go HTTP server in `cmd/app` using chi, with health check probes
   and graceful shutdown via Gofra's `runtime/health` and `runtime/serve`
 - a proto-driven config schema in `proto/gospa/config/v1/config.proto`
-- config code generation via `mise run generate` (produces `config/*_gen.go`)
-- optional YAML overrides in `gofra.yaml`
-- a `compose.yaml` file for local PostgreSQL with a named volume and healthcheck
-- `mise run infra` tasks that work with either Docker Compose or Podman Compose
-- a minimal embedded web shell in `web/`
-- health check endpoints at `/startupz`, `/livez`, `/readyz` (Kubernetes convention)
-- a multi-stage `Dockerfile` producing a static distroless image
-- `.github/workflows/ci.yml` running tests, build, and a local image build
+  (Go + TS codegen via `mise run generate`)
+- a `compose.yaml` with PostgreSQL and ZITADEL side-by-side, wired so
+  `mise run infra` materialises a provisioner PAT under
+  `./.secrets/zitadel-provisioner.pat` on first run
+- a hard startup contract: Gospa refuses to start without a valid PAT
+  file at `GOSPA_ZITADEL_PROVISIONER_PAT_FILE` (local dev reads from
+  `./.secrets/...`, Kubernetes reads from a mounted Secret)
+- workspace singleton + companies tables, with eager ZITADEL org
+  creation per company
+- a first-run `/install` wizard (React + TanStack Router/Query/Form,
+  Tailwind v4, shadcn/ui) that provisions the MSP org, initial admin,
+  project, and OIDC SPA application in ZITADEL
+- OIDC login scoped to the workspace's ZITADEL org via
+  `urn:zitadel:iam:org:id:<orgID>`
+- health check endpoints at `/startupz`, `/livez`, `/readyz`
+- a multi-stage `Dockerfile` (Node → Go → distroless) producing a
+  static image with the SPA embedded
+- `.github/workflows/ci.yml` running tests, build, and a local image
+  build
 
 Config fields, defaults, and descriptions are defined once in the proto file.
 Run `mise run generate` after editing the proto to regenerate the Go code.
+
+Known MVP debts (no install key, single PAT for bootstrap + runtime,
+no authz yet, Restate deferred, single-replica install) are recorded
+in [`docs/blueprint/index.md` § Apêndice C](docs/blueprint/index.md#apêndice-c--mvp-debts-identidade--onboarding).
 
 ## Run
 
@@ -69,8 +84,12 @@ mise run dev
 `mise run dev` depends on `mise run generate`, so config code is always
 up-to-date before the server starts.
 
-`mise run infra` starts PostgreSQL through either `docker compose` or
-`podman compose`, then waits until the database accepts connections.
+`mise run infra` starts PostgreSQL **and ZITADEL** through either
+`docker compose` or `podman compose`, waits until Postgres accepts
+connections and ZITADEL returns `/debug/healthz` 200, and materialises
+the provisioner PAT at `./.secrets/zitadel-provisioner.pat` via the
+ZITADEL `FirstInstance.PatPath` bootstrap. `mise run dev` will refuse
+to start if that file is missing or empty.
 
 The default database settings already line up across `compose.yaml`,
 `gofra.yaml`, and the migration tasks, so no `.env` file is required for the
@@ -95,8 +114,10 @@ The starter ships with these `mise` tasks:
 | `mise run test` | Run `go test ./...` after regenerating config code. |
 | `mise run build` | Build the application binary to `bin/gospa`. |
 | `mise run dev` | Start the backend locally (depends on `generate`). |
-| `mise run infra` | Start local infrastructure (Postgres) via Compose. |
-| `mise run infra:stop` / `infra:reset` / `infra:logs` | Manage local infrastructure. |
+| `mise run infra` | Start local infrastructure (Postgres + ZITADEL) via Compose and materialise the provisioner PAT. |
+| `mise run infra:stop` / `infra:reset` / `infra:logs` | Manage local infrastructure. `infra:reset` wipes the PAT and forces a fresh ZITADEL bootstrap on next `infra`. |
+| `mise run web:dev` | Start the Vite dev server on `:5173` (pair with `mise run dev`). |
+| `mise run web:build` | Build the frontend into `web/dist` so the Go binary can embed it. |
 | `mise run migrate` / `migrate:create` / `migrate:down` / `migrate:status` | Manage database migrations via `goose`. |
 | `mise run seed` | Seed the database with development data. |
 
