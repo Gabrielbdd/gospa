@@ -15,11 +15,16 @@ import (
 	runtimedatabase "github.com/Gabrielbdd/gofra/runtime/database"
 	runtimehealth "github.com/Gabrielbdd/gofra/runtime/health"
 	runtimeserve "github.com/Gabrielbdd/gofra/runtime/serve"
+	zitadelsecret "github.com/Gabrielbdd/gofra/runtime/zitadel/secret"
 
 	"github.com/Gabrielbdd/gospa/config"
 	"github.com/Gabrielbdd/gospa/db"
 	"github.com/Gabrielbdd/gospa/web"
 )
+
+// provisionerPATEnv overrides zitadel.provisioner_pat_file from the config.
+// Kubernetes deploys set this to the mount path of the secret volume.
+const provisionerPATEnv = "GOSPA_ZITADEL_PROVISIONER_PAT_FILE"
 
 func main() {
 	cfg, err := config.Load(os.Args[1:])
@@ -29,6 +34,17 @@ func main() {
 	}
 
 	ctx := context.Background()
+
+	// --- Zitadel provisioner PAT (hard startup contract) -------------------
+	// Gospa refuses to start unless a valid provisioner PAT is already on
+	// disk. In local dev `mise run infra` materialises the file; in
+	// Kubernetes the operator mounts a Secret at the configured path.
+
+	if _, err := loadProvisionerPAT(cfg); err != nil {
+		slog.Error("zitadel provisioner PAT unavailable; refusing to start", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("zitadel provisioner PAT loaded")
 
 	// --- Database -----------------------------------------------------------
 
@@ -123,6 +139,32 @@ func main() {
 		slog.Error("server stopped with error", "error", err)
 		os.Exit(1)
 	}
+}
+
+// loadProvisionerPAT resolves the PAT path (env-var override beats config)
+// and reads the file. Returns an actionable error if the path is empty, the
+// file is missing, or the file is empty. Called at startup; the returned
+// token is consumed by later handlers (install, companies) once those wire
+// in.
+func loadProvisionerPAT(cfg *config.Config) (string, error) {
+	path := os.Getenv(provisionerPATEnv)
+	if path == "" {
+		path = cfg.Zitadel.ProvisionerPatFile
+	}
+	if path == "" {
+		return "", fmt.Errorf(
+			"no provisioner PAT path configured: set %s or zitadel.provisioner_pat_file in gofra.yaml",
+			provisionerPATEnv,
+		)
+	}
+	pat, err := zitadelsecret.Read(zitadelsecret.Source{FilePath: path})
+	if err != nil {
+		return "", fmt.Errorf(
+			"reading provisioner PAT at %q: %w (run `mise run infra` locally, or mount the Kubernetes Secret before starting)",
+			path, err,
+		)
+	}
+	return pat, nil
 }
 
 // parseDuration parses a Go duration string (e.g. "30m", "1h"). Returns zero
