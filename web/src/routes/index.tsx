@@ -6,6 +6,7 @@ import { useAuth } from "react-oidc-context";
 import { Button } from "@/components/ui/button";
 import { listCompanies } from "@/lib/companies-client";
 import { getStatus } from "@/lib/install-client";
+import { getLastLoginEmail, setLastLoginEmail } from "@/lib/login-hint";
 import { runtimeConfig } from "@/lib/runtime-config";
 import { rootRoute } from "@/routes/__root";
 
@@ -27,6 +28,18 @@ function HomePage() {
   const configOrgId = runtimeConfig.auth?.orgId ?? "";
   const auth = useAuth();
   const accessToken = auth.user?.access_token;
+
+  // Persist the email of every successful sign-in so the next click
+  // of the Log-in button hands ZITADEL a login_hint and the operator
+  // does not have to retype it.
+  useEffect(() => {
+    if (auth.isAuthenticated) {
+      const email = auth.user?.profile.email;
+      if (typeof email === "string") {
+        setLastLoginEmail(email);
+      }
+    }
+  }, [auth.isAuthenticated, auth.user?.profile.email]);
 
   // Companies probe: a single ListCompanies call that proves the
   // end-to-end auth contract works (token type, audience, issuer,
@@ -110,7 +123,10 @@ function HomePage() {
         ) : (
           <Button
             onClick={() => {
-              void auth.signinRedirect();
+              const hint = getLastLoginEmail();
+              void auth.signinRedirect(
+                hint ? { login_hint: hint } : undefined,
+              );
             }}
             disabled={!effectiveOrgId}
           >

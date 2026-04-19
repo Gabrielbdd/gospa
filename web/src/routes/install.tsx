@@ -11,6 +11,7 @@ import {
   type InstallRequest,
   type InstallState,
 } from "@/lib/install-client";
+import { setLastLoginEmail } from "@/lib/login-hint";
 import { cn } from "@/lib/utils";
 import { rootRoute } from "@/routes/__root";
 
@@ -88,8 +89,19 @@ function InstallPage() {
       givenName: "",
       familyName: "",
       password: "",
+      passwordConfirm: "",
     },
     onSubmit: async ({ value }) => {
+      if (value.password !== value.passwordConfirm) {
+        // form.Field for passwordConfirm renders this same hint
+        // inline; throwing prevents the mutation from firing.
+        return;
+      }
+      // Stash the admin email so the Log-in button can pre-fill
+      // ZITADEL's username field for the very first sign-in. Later
+      // sign-ins overwrite this with auth.user.profile.email after
+      // a successful login (see HomePage).
+      setLastLoginEmail(value.email);
       installMutation.mutate({
         req: {
           workspaceName: value.workspaceName,
@@ -242,24 +254,52 @@ function InstallPage() {
               )}
             </form.Field>
           </div>
-          <form.Field name="password">
-            {(field) => (
-              <Field
-                label="Initial password"
-                hint="Min 8 characters. Used for first login; ZITADEL applies its own policy on top (digit, case)."
-              >
-                <input
-                  type="password"
-                  className={inputClass}
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  minLength={8}
-                  required
-                  autoComplete="new-password"
-                />
-              </Field>
-            )}
-          </form.Field>
+          <div className="grid grid-cols-2 gap-3">
+            <form.Field name="password">
+              {(field) => (
+                <Field
+                  label="Initial password"
+                  hint="Min 8 chars. ZITADEL also requires digit + case."
+                >
+                  <input
+                    type="password"
+                    className={inputClass}
+                    value={field.state.value}
+                    onChange={(e) => field.handleChange(e.target.value)}
+                    minLength={8}
+                    required
+                    autoComplete="new-password"
+                  />
+                </Field>
+              )}
+            </form.Field>
+            <form.Field name="passwordConfirm">
+              {(field) => {
+                const mismatch =
+                  field.state.value !== "" &&
+                  form.state.values.password !== field.state.value;
+                return (
+                  <Field
+                    label="Confirm password"
+                    hint={mismatch ? "Passwords do not match." : undefined}
+                  >
+                    <input
+                      type="password"
+                      className={cn(
+                        inputClass,
+                        mismatch && "border-destructive",
+                      )}
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      minLength={8}
+                      required
+                      autoComplete="new-password"
+                    />
+                  </Field>
+                );
+              }}
+            </form.Field>
+          </div>
 
           {installMutation.isError && (
             <p className="text-sm text-destructive">
