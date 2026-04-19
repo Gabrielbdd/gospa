@@ -48,6 +48,14 @@ type Orchestrator struct {
 	Queries Queries
 	Zitadel zitadel.Client
 	Logger  *slog.Logger
+
+	// OnReady, if set, runs after MarkWorkspaceReady succeeds. It
+	// receives the ZITADEL project id (the JWT audience) and is wired
+	// by cmd/app to authgate.Activate so the JWT middleware flips from
+	// pass-through to authenticated the moment install finishes — no
+	// process restart required. Errors are logged but do not fail the
+	// install.
+	OnReady func(ctx context.Context, projectID string) error
 }
 
 // Run executes the six ordered steps, writing each outcome to the
@@ -123,5 +131,11 @@ func (o *Orchestrator) Run(ctx context.Context, in Input) error {
 	}
 
 	log.InfoContext(ctx, "install complete", "org_id", orgResp.OrgID, "project_id", projectID, "app_id", appResp.AppID)
+
+	if o.OnReady != nil {
+		if err := o.OnReady(ctx, projectID); err != nil {
+			log.WarnContext(ctx, "install OnReady hook failed", "error", err)
+		}
+	}
 	return nil
 }

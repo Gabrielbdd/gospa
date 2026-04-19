@@ -123,10 +123,23 @@ func TestOrchestrator_Run_HappyPath_PersistsAllIDsAndMarksReady(t *testing.T) {
 		addProjectResp: "proj-1",
 		addOIDCResp:    zitadel.AddOIDCAppResponse{AppID: "app-1", ClientID: "cli-1"},
 	}
-	o := install.Orchestrator{Queries: q, Zitadel: z, Logger: newLogger()}
+	var onReadyProject string
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Logger:  newLogger(),
+		OnReady: func(_ context.Context, projectID string) error {
+			onReadyProject = projectID
+			return nil
+		},
+	}
 
 	if err := o.Run(context.Background(), newInput()); err != nil {
 		t.Fatalf("Run: %v", err)
+	}
+
+	if onReadyProject != "proj-1" {
+		t.Errorf("OnReady received project id %q; want %q", onReadyProject, "proj-1")
 	}
 
 	if z.setUpOrgReq.OrgName != "Acme MSP" {
@@ -158,7 +171,16 @@ func TestOrchestrator_Run_HappyPath_PersistsAllIDsAndMarksReady(t *testing.T) {
 func TestOrchestrator_Run_OrgFailureMarksFailedAndStops(t *testing.T) {
 	q := &fakeQueries{}
 	z := &fakeZitadel{setUpOrgErr: errors.New("zitadel unavailable")}
-	o := install.Orchestrator{Queries: q, Zitadel: z, Logger: newLogger()}
+	var onReadyCalled bool
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Logger:  newLogger(),
+		OnReady: func(_ context.Context, _ string) error {
+			onReadyCalled = true
+			return nil
+		},
+	}
 
 	err := o.Run(context.Background(), newInput())
 	if err == nil {
@@ -175,6 +197,9 @@ func TestOrchestrator_Run_OrgFailureMarksFailedAndStops(t *testing.T) {
 	}
 	if z.addProjectOrg != "" {
 		t.Error("AddProject should not have been called after org failure")
+	}
+	if onReadyCalled {
+		t.Error("OnReady should not fire on install failure")
 	}
 }
 

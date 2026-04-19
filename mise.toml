@@ -50,12 +50,28 @@ run = "buf generate"
 sources = ["proto/**/*.proto", "buf.gen.yaml", "buf.yaml"]
 outputs = ["gen/**/*.go"]
 
-[tasks.dev]
-description = "Generate and start the backend"
+[tasks."dev:api"]
+description = "Run only the Go backend (no frontend)"
 depends = ["generate"]
 run = """
 . ./scripts/load-env.sh
 go run ./cmd/app
+"""
+
+[tasks.dev]
+description = "Run the Go backend and the Vite dev server together (Ctrl+C stops both)"
+depends = ["generate"]
+run = """
+. ./scripts/load-env.sh
+
+# Pre-install web deps synchronously so the parallel start is clean.
+(cd web && npm install --no-audit --no-fund --ignore-scripts >/dev/null)
+
+trap 'kill 0 2>/dev/null || true' INT TERM EXIT
+
+(cd web && npm run dev) &
+go run ./cmd/app &
+wait
 """
 
 [tasks.infra]

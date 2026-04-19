@@ -22,6 +22,7 @@ import (
 	"github.com/Gabrielbdd/gospa/db/sqlc"
 	"github.com/Gabrielbdd/gospa/gen/gospa/companies/v1/companiesv1connect"
 	"github.com/Gabrielbdd/gospa/gen/gospa/install/v1/installv1connect"
+	"github.com/Gabrielbdd/gospa/internal/authgate"
 	"github.com/Gabrielbdd/gospa/internal/companies"
 	"github.com/Gabrielbdd/gospa/internal/install"
 	"github.com/Gabrielbdd/gospa/internal/publicconfig"
@@ -98,15 +99,33 @@ func main() {
 		}
 	}
 
-	// --- Zitadel admin client + install handler -----------------------------
+	// --- Zitadel admin client + install orchestrator + auth gate -----------
 
 	zitadelClient := zitadel.NewHTTPClient(cfg.Zitadel.AdminAPIURL, provisionerPAT, nil)
 	queries := sqlc.New(pool)
+
+	// The auth gate starts as a pass-through so the /install wizard
+	// (which runs before any user exists) remains reachable. The
+	// install orchestrator flips it to authenticated the moment the
+	// pipeline marks the workspace ready — no process restart.
+	//
+	// /install RPCs stay public forever: even after activation they
+	// return FailedPrecondition if install_state != not_initialized, so
+	// repeated clicks are safe to serve without auth.
+	gate := authgate.New(cfg.Zitadel.AdminAPIURL, runtimeauth.PublicProcedures(
+		installv1connect.InstallServiceGetStatusProcedure,
+		installv1connect.InstallServiceInstallProcedure,
+	))
 
 	installOrchestrator := &install.Orchestrator{
 		Queries: queries,
 		Zitadel: zitadelClient,
 		Logger:  slog.Default(),
+		OnReady: func(_ context.Context, projectID string) error {
+			// Detach from the request context — the install request has
+			// already returned by the time Activate runs.
+			return gate.Activate(context.Background(), projectID)
+		},
 	}
 	installHandler := &install.Handler{
 		Queries:      queries,
@@ -120,42 +139,16 @@ func main() {
 		Logger:  slog.Default(),
 	}
 
-	// --- Auth ---------------------------------------------------------------
-	// Auth auto-derives from the installed workspace: once `/install`
-	// completes, workspace.zitadel_project_id is populated and this block
-	// wires the JWT middleware with issuer = cfg.Zitadel.AdminAPIURL and
-	// audience = that project id. Before install, the middleware is a
-	// no-op so the install wizard itself can run.
-	//
-	// Explicit cfg.Auth.Issuer + cfg.Auth.Audience still take precedence
-	// for exotic self-hosted setups where the app should validate tokens
-	// against a different issuer than the one it uses to provision orgs.
-
-	issuer, audience := resolveAuthEndpoints(ctx, cfg, queries)
-
-	var authMiddleware func(http.Handler) http.Handler
-
-	if issuer != "" && audience != "" {
-		verifier, err := runtimeauth.NewJWTVerifier(ctx, issuer, audience)
-		if err != nil {
-			slog.Error("auth verifier setup failed", "error", err)
-			os.Exit(1)
+	// Eager activation for established deployments: if the workspace is
+	// already installed (pod restart, container rolling update), turn
+	// auth on immediately instead of waiting for a new install.
+	if ws, wsErr := queries.GetWorkspace(ctx); wsErr == nil &&
+		string(ws.InstallState) == "ready" && ws.ZitadelProjectID.Valid {
+		if err := gate.Activate(ctx, ws.ZitadelProjectID.String); err != nil {
+			slog.Warn("auth gate startup activation failed", "error", err)
 		}
-
-		isPublic := runtimeauth.PublicProcedures(
-			// /install runs before any user exists, so its RPCs cannot
-			// require a valid token. Operators are responsible for
-			// keeping /install behind a private ingress until the
-			// workspace is ready (the SPA also shows a banner warning
-			// about this).
-			installv1connect.InstallServiceGetStatusProcedure,
-			installv1connect.InstallServiceInstallProcedure,
-		)
-
-		authMiddleware = runtimeauth.NewMiddleware(verifier, isPublic)
-		slog.Info("auth enabled", "issuer", issuer, "audience", audience)
 	} else {
-		slog.Info("auth disabled: workspace not installed yet; complete /install then restart")
+		slog.Info("auth disabled: workspace not installed yet; /install flow remains public")
 	}
 
 	// --- Health & Routing ---------------------------------------------------
@@ -171,11 +164,10 @@ func main() {
 	root.Handle(runtimehealth.DefaultLivenessPath, health.LivenessHandler())
 	root.Handle(runtimehealth.DefaultReadinessPath, health.ReadinessHandler())
 
-	// App router — auth middleware protects Connect RPC procedures when enabled.
+	// App router. The auth gate is always mounted; it no-ops until the
+	// install orchestrator activates it.
 	app := chi.NewRouter()
-	if authMiddleware != nil {
-		app.Use(authMiddleware)
-	}
+	app.Use(gate.Middleware)
 	// /_gofra/config.js is served by the publicconfig wrapper so the
 	// browser receives auth.orgId from the workspace singleton. The SPA
 	// uses that field to scope its OIDC login request to the MSP org.
@@ -215,37 +207,6 @@ func main() {
 		slog.Error("server stopped with error", "error", err)
 		os.Exit(1)
 	}
-}
-
-// resolveAuthEndpoints picks the issuer + audience used to verify JWT access
-// tokens on this process.
-//
-//  1. Explicit cfg.Auth.Issuer + cfg.Auth.Audience override everything
-//     (used when operators point the app at a ZITADEL instance different
-//     from the one it provisions to, or when pinning an audience that is
-//     not the MSP project).
-//  2. Otherwise, derive from the installed workspace row: issuer is the
-//     ZITADEL admin URL the app already talks to, audience is the MSP
-//     project id the install orchestrator persisted.
-//  3. If the workspace is not installed yet (pre-install or failed),
-//     returns empty strings so the middleware stays off.
-func resolveAuthEndpoints(ctx context.Context, cfg *config.Config, queries *sqlc.Queries) (issuer, audience string) {
-	if cfg.Auth.Issuer != "" && cfg.Auth.Audience != "" {
-		return cfg.Auth.Issuer, cfg.Auth.Audience
-	}
-
-	ws, err := queries.GetWorkspace(ctx)
-	if err != nil {
-		slog.Warn("auth: could not read workspace row; leaving auth disabled", "error", err)
-		return "", ""
-	}
-	if string(ws.InstallState) != "ready" {
-		return "", ""
-	}
-	if !ws.ZitadelProjectID.Valid || ws.ZitadelProjectID.String == "" {
-		return "", ""
-	}
-	return cfg.Zitadel.AdminAPIURL, ws.ZitadelProjectID.String
 }
 
 // loadProvisionerPAT resolves the PAT path (env-var override beats config)
