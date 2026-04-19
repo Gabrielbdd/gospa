@@ -1,6 +1,7 @@
 import { createRoute, redirect } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
+import { startLogin } from "@/lib/auth";
 import { getStatus } from "@/lib/install-client";
 import { runtimeConfig } from "@/lib/runtime-config";
 import { rootRoute } from "@/routes/__root";
@@ -19,6 +20,7 @@ export const indexRoute = createRoute({
 });
 
 function HomePage() {
+  const orgId = runtimeConfig.auth?.orgId;
   return (
     <main className="mx-auto max-w-3xl space-y-6 p-8">
       <header className="space-y-2">
@@ -30,9 +32,21 @@ function HomePage() {
         </p>
       </header>
       <div className="flex gap-3">
-        <Button>Log in</Button>
+        <Button
+          onClick={() => {
+            void startLogin();
+          }}
+          disabled={!orgId}
+        >
+          Log in
+        </Button>
         <Button variant="outline">Documentation</Button>
       </div>
+      {!orgId && (
+        <p className="text-xs text-muted-foreground">
+          Login disabled — workspace auth.orgId has not been resolved yet.
+        </p>
+      )}
     </main>
   );
 }

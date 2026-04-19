@@ -24,9 +24,27 @@ import (
 	"github.com/Gabrielbdd/gospa/gen/gospa/install/v1/installv1connect"
 	"github.com/Gabrielbdd/gospa/internal/companies"
 	"github.com/Gabrielbdd/gospa/internal/install"
+	"github.com/Gabrielbdd/gospa/internal/publicconfig"
 	"github.com/Gabrielbdd/gospa/internal/zitadel"
 	"github.com/Gabrielbdd/gospa/web"
 )
+
+// workspaceOrgProvider adapts sqlc.Queries.GetWorkspace to the
+// publicconfig.WorkspaceOrgIDProvider interface.
+type workspaceOrgProvider struct {
+	queries *sqlc.Queries
+}
+
+func (p workspaceOrgProvider) WorkspaceOrgID(ctx context.Context) (string, error) {
+	ws, err := p.queries.GetWorkspace(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !ws.ZitadelOrgID.Valid {
+		return "", nil
+	}
+	return ws.ZitadelOrgID.String, nil
+}
 
 // provisionerPATEnv overrides zitadel.provisioner_pat_file from the config.
 // Kubernetes deploys set this to the mount path of the secret volume.
@@ -151,7 +169,10 @@ func main() {
 	if authMiddleware != nil {
 		app.Use(authMiddleware)
 	}
-	app.Handle(runtimeconfig.DefaultPath, config.PublicConfigHandler(cfg))
+	// /_gofra/config.js is served by the publicconfig wrapper so the
+	// browser receives auth.orgId from the workspace singleton. The SPA
+	// uses that field to scope its OIDC login request to the MSP org.
+	app.Handle(runtimeconfig.DefaultPath, publicconfig.Handler(cfg, workspaceOrgProvider{queries: queries}))
 
 	// Install service is mounted on the app router; auth middleware
 	// (when enabled) skips it because its procedures are registered

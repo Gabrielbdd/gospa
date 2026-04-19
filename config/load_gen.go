@@ -20,6 +20,7 @@ func NewFlagSet() *flag.FlagSet {
 	f.String("public.auth.client_id", "", "OIDC browser client ID")
 	f.String("public.auth.redirect_path", "", "Auth callback path")
 	f.String("public.auth.post_logout_redirect_path", "", "Redirect path after logout")
+	f.String("public.auth.org_id", "", "ZITADEL organization ID the SPA scopes its login request to via the")
 	f.Int32("database.max_conns", 0, "Maximum number of connections in the pool (0 = pgxpool default)")
 	f.Int32("database.min_conns", 0, "Minimum number of idle connections maintained (0 = pgxpool default)")
 	f.String("database.max_conn_lifetime", "", "Maximum time a connection can be reused, as a Go duration string such as 1h. Empty uses pgxpool default")

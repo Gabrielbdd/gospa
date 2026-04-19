@@ -47,6 +47,8 @@ type PublicAuthConfig struct {
 	RedirectPath string `koanf:"redirect_path" yaml:"redirect_path" json:"redirectPath"`
 	// Redirect path after logout.
 	PostLogoutRedirectPath string `koanf:"post_logout_redirect_path" yaml:"post_logout_redirect_path" json:"postLogoutRedirectPath"`
+	// ZITADEL organization ID the SPA scopes its login request to via the.
+	OrgID string `koanf:"org_id" yaml:"org_id" json:"orgId"`
 }
 
 // PublicConfig — PublicConfig holds browser-safe configuration delivered to the frontend.

@@ -12,7 +12,10 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    emptyOutDir: true,
+    // emptyOutDir is false so the tracked `dist/.gitkeep` survives builds.
+    // Without it, //go:embed all:dist would fail on a clean checkout that
+    // has not yet run `npm run build`.
+    emptyOutDir: false,
   },
   server: {
     port: 5173,

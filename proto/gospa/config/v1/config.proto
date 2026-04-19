@@ -112,4 +112,9 @@ message PublicAuthConfig {
 
   // Redirect path after logout.
   string post_logout_redirect_path = 5 [(gofra.config.v1.field).default_value.string_value = "/"];
+
+  // ZITADEL organization ID the SPA scopes its login request to via the
+  // urn:zitadel:iam:org:id:<org> scope. Populated at request time from
+  // the workspace singleton once install completes; empty before install.
+  string org_id = 6;
 }
