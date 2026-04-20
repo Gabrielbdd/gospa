@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -24,7 +25,13 @@ type Queries interface {
 	MarkWorkspaceFailed(ctx context.Context, installError pgtype.Text) error
 	MarkWorkspaceReady(ctx context.Context) error
 	PersistZitadelIDs(ctx context.Context, arg sqlc.PersistZitadelIDsParams) error
-	RepairWorkspaceAuthContract(ctx context.Context, arg sqlc.RepairWorkspaceAuthContractParams) error
+	// Team materialisation queries — used by the install bootstrap to
+	// give the MSP a first-class company row, an admin contact, and an
+	// admin workspace_grant in the same flow that flips the workspace
+	// to ready. The team-contacts-unified change introduces them.
+	CreateWorkspaceCompany(ctx context.Context, arg sqlc.CreateWorkspaceCompanyParams) (sqlc.Company, error)
+	CreateContact(ctx context.Context, arg sqlc.CreateContactParams) (sqlc.Contact, error)
+	CreateWorkspaceGrant(ctx context.Context, arg sqlc.CreateWorkspaceGrantParams) (sqlc.WorkspaceGrant, error)
 }
 
 // Input captures the workspace and initial-admin fields the wizard
@@ -159,8 +166,7 @@ func (o *Orchestrator) Run(ctx context.Context, in Input) error {
 	// Step 5: persist the seven-field auth contract on the singleton row.
 	// Identifiers come straight from the ZITADEL responses; the auth
 	// contract (issuer/management/audience) is derived once via the
-	// zitadelcontract helper so the orchestrator and the startup
-	// read-repair path agree on the rules.
+	// zitadelcontract helper so the rules live in one place.
 	log.InfoContext(ctx, "install step starting", "step", "persist_ids")
 	contract := zitadelcontract.DeriveFresh(o.Config, projectID)
 	if err := o.Queries.PersistZitadelIDs(ctx, sqlc.PersistZitadelIDsParams{
@@ -173,6 +179,45 @@ func (o *Orchestrator) Run(ctx context.Context, in Input) error {
 		ZitadelApiAudience:   pgtype.Text{String: contract.APIAudience, Valid: contract.APIAudience != ""},
 	}); err != nil {
 		return fail("persist_ids", err)
+	}
+
+	// Step 5b: materialise the MSP company + admin contact + admin
+	// workspace_grant. This gives the MSP a first-class companies row
+	// (is_workspace_owner = TRUE) sharing the schema with customer
+	// companies, the admin a contact row tied to that company, and
+	// the admin an active workspace_grant with role = 'admin'.
+	//
+	// Authorization lives entirely in workspace_grants — no ZITADEL
+	// project roles or user grants are created here. The admin still
+	// holds their implicit ORG_OWNER on the workspace org from
+	// SetUpOrg, which is unrelated to Gospa's authz layer.
+	log.InfoContext(ctx, "install step starting", "step", "materialize_team")
+	mspCompany, err := o.Queries.CreateWorkspaceCompany(ctx, sqlc.CreateWorkspaceCompanyParams{
+		Name:         in.WorkspaceName,
+		Slug:         in.WorkspaceSlug,
+		ZitadelOrgID: orgResp.OrgID,
+	})
+	if err != nil {
+		return fail("materialize_team", err)
+	}
+	adminContact, err := o.Queries.CreateContact(ctx, sqlc.CreateContactParams{
+		CompanyID:      mspCompany.ID,
+		FullName:       fullName(in.AdminFirst, in.AdminLast, in.AdminEmail),
+		Email:          pgtype.Text{String: in.AdminEmail, Valid: in.AdminEmail != ""},
+		ZitadelUserID:  pgtype.Text{String: orgResp.UserID, Valid: true},
+		IdentitySource: "manual",
+	})
+	if err != nil {
+		return fail("materialize_team", err)
+	}
+	if _, err := o.Queries.CreateWorkspaceGrant(ctx, sqlc.CreateWorkspaceGrantParams{
+		ContactID: adminContact.ID,
+		Role:      sqlc.WorkspaceRoleAdmin,
+		Status:    sqlc.GrantStatusActive,
+		// granted_by_contact_id intentionally NULL — the install admin
+		// grant has no granter. Future invites will populate it.
+	}); err != nil {
+		return fail("materialize_team", err)
 	}
 
 	// Step 6: flip the workspace row to ready.
@@ -189,4 +234,23 @@ func (o *Orchestrator) Run(ctx context.Context, in Input) error {
 		}
 	}
 	return nil
+}
+
+// fullName composes a display name for the bootstrapped admin contact
+// using the wizard's first/last fields. Falls back to the email when
+// both name fields are empty so the contact row always has a non-empty
+// full_name (the column is NOT NULL).
+func fullName(first, last, email string) string {
+	first = strings.TrimSpace(first)
+	last = strings.TrimSpace(last)
+	switch {
+	case first != "" && last != "":
+		return first + " " + last
+	case first != "":
+		return first
+	case last != "":
+		return last
+	default:
+		return email
+	}
 }

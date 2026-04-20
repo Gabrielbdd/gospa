@@ -41,7 +41,7 @@ imports from Gofra), see the
 | `internal/authgate` | dynamic gate: inactive (public Connect through, private 401) → JWT-validating after `Activate` |
 | `internal/installtoken` | loads + validates the operator-supplied bootstrap secret |
 | `internal/patwatch` | observes the PAT file with last-known-good semantics, K8s-symlink-swap aware |
-| `internal/install` | orchestrator (6-step ZITADEL provisioning) + read-repair on startup + opportunistic cleanup |
+| `internal/install` | orchestrator (6-step ZITADEL provisioning) + opportunistic cleanup on mid-install failure |
 | `internal/zitadel` | hand-wired ZITADEL Admin/Management API client |
 | `internal/zitadelcontract` | derives issuer/management/audience + OIDC scope URNs from cfg + workspace row |
 | `internal/publicconfig` | mutator that injects workspace-scoped values into `/_gofra/config.js` |

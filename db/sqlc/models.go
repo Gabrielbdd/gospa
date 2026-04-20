@@ -11,6 +11,49 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type GrantStatus string
+
+const (
+	GrantStatusActive         GrantStatus = "active"
+	GrantStatusNotSignedInYet GrantStatus = "not_signed_in_yet"
+	GrantStatusSuspended      GrantStatus = "suspended"
+)
+
+func (e *GrantStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = GrantStatus(s)
+	case string:
+		*e = GrantStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for GrantStatus: %T", src)
+	}
+	return nil
+}
+
+type NullGrantStatus struct {
+	GrantStatus GrantStatus `json:"grant_status"`
+	Valid       bool        `json:"valid"` // Valid is true if GrantStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullGrantStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.GrantStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.GrantStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullGrantStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.GrantStatus), nil
+}
+
 type WorkspaceInstallState string
 
 const (
@@ -55,13 +98,79 @@ func (ns NullWorkspaceInstallState) Value() (driver.Value, error) {
 	return string(ns.WorkspaceInstallState), nil
 }
 
+type WorkspaceRole string
+
+const (
+	WorkspaceRoleAdmin      WorkspaceRole = "admin"
+	WorkspaceRoleTechnician WorkspaceRole = "technician"
+)
+
+func (e *WorkspaceRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = WorkspaceRole(s)
+	case string:
+		*e = WorkspaceRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for WorkspaceRole: %T", src)
+	}
+	return nil
+}
+
+type NullWorkspaceRole struct {
+	WorkspaceRole WorkspaceRole `json:"workspace_role"`
+	Valid         bool          `json:"valid"` // Valid is true if WorkspaceRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullWorkspaceRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.WorkspaceRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.WorkspaceRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullWorkspaceRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.WorkspaceRole), nil
+}
+
 type Company struct {
-	ID           pgtype.UUID        `json:"id"`
-	Name         string             `json:"name"`
-	Slug         string             `json:"slug"`
-	ZitadelOrgID string             `json:"zitadel_org_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	ArchivedAt   pgtype.Timestamptz `json:"archived_at"`
+	ID               pgtype.UUID        `json:"id"`
+	Name             string             `json:"name"`
+	Slug             string             `json:"slug"`
+	ZitadelOrgID     string             `json:"zitadel_org_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ArchivedAt       pgtype.Timestamptz `json:"archived_at"`
+	IsWorkspaceOwner bool               `json:"is_workspace_owner"`
+	AddressLine1     string             `json:"address_line1"`
+	AddressLine2     string             `json:"address_line2"`
+	City             string             `json:"city"`
+	Region           string             `json:"region"`
+	PostalCode       string             `json:"postal_code"`
+	Country          string             `json:"country"`
+	Timezone         string             `json:"timezone"`
+}
+
+type Contact struct {
+	ID             pgtype.UUID        `json:"id"`
+	CompanyID      pgtype.UUID        `json:"company_id"`
+	FullName       string             `json:"full_name"`
+	JobTitle       pgtype.Text        `json:"job_title"`
+	Email          pgtype.Text        `json:"email"`
+	Phone          pgtype.Text        `json:"phone"`
+	Mobile         pgtype.Text        `json:"mobile"`
+	Notes          pgtype.Text        `json:"notes"`
+	ZitadelUserID  pgtype.Text        `json:"zitadel_user_id"`
+	IdentitySource string             `json:"identity_source"`
+	ExternalID     pgtype.Text        `json:"external_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	ArchivedAt     pgtype.Timestamptz `json:"archived_at"`
 }
 
 type Workspace struct {
@@ -81,4 +190,13 @@ type Workspace struct {
 	ZitadelIssuerUrl     pgtype.Text           `json:"zitadel_issuer_url"`
 	ZitadelManagementUrl pgtype.Text           `json:"zitadel_management_url"`
 	ZitadelApiAudience   pgtype.Text           `json:"zitadel_api_audience"`
+}
+
+type WorkspaceGrant struct {
+	ContactID          pgtype.UUID        `json:"contact_id"`
+	Role               WorkspaceRole      `json:"role"`
+	Status             GrantStatus        `json:"status"`
+	LastSeenAt         pgtype.Timestamptz `json:"last_seen_at"`
+	GrantedAt          pgtype.Timestamptz `json:"granted_at"`
+	GrantedByContactID pgtype.UUID        `json:"granted_by_contact_id"`
 }

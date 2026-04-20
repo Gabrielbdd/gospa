@@ -796,5 +796,30 @@ para não reabrirem sem contexto:
 
 ---
 
-**Versão**: 1.3 — Apêndice C documenta as dívidas deliberadas do MVP de identidade/onboarding.
+## Apêndice D — MVP cuts (2026-04)
+
+A mudança `team-contacts-unified` (em `openspec/changes/`) decidiu
+deliberadamente **não construir** um conjunto de coisas que o blueprint
+descreve como visão. As decisões são pragmáticas para MVP, **não**
+revisão da visão de produto. O blueprint acima continua sendo a estrela
+do norte; este apêndice documenta o que está adiado, por quê, e qual
+sinal traria de volta.
+
+| Cortado no MVP | Promessa do blueprint | Razão pragmática | Sinal que reabre |
+|---|---|---|---|
+| **Sites por company** | "empresa cliente + múltiplos sites + múltiplos contatos" (§4.2) | Cliente real ainda não existe; quando aparecer um com >1 localização operacional vale construir. Custo de migrar address da company para um default-site é localizado. | 1ª company real com múltiplas localizações operacionais |
+| **7 roles + ABAC** | "owner, admin, technician, dispatcher, finance, client-contact, client-admin" (§4.1) | Dois roles cobrem o universo MSP-pequeno. Distinções finer-grained são especulação até alguém reclamar. | Pedido concreto de policy que `admin/technician` não consegue expressar |
+| **Email invite com link** | "Convite por link, onboarding guiado" (§4.1) | Exige SMTP. Pre-v1 nem deploy real existe. Senha temporária mostrada uma vez resolve hoje. | SMTP configurado em produção como first-class config |
+| **OIDC + introspection** | "PSA consome via OIDC + introspection" (§4.1) | Introspection adiciona ~50ms por RPC. JWT validado local + DB lookup pra role é mais rápido e mais simples. | Demanda de revogação live de role (hoje a janela é 1 boot) |
+| **Read-repair / backfill / migration shims** | (Não estava no blueprint, mas existia no código) | Pre-v1 não há dados em produção pra proteger. Código de repair tem custo eterno de manutenção. **Hard rule** em `AGENTS.md`. | v1 + produção real com dados que não podem ser dropados |
+| **Hard-kill de team member** | (Implícito em "permissions") | Suspend (Gospa-only) cobre 100% do caso enquanto Gospa for o único consumer da ZITADEL. | Segundo sistema consumindo a mesma ZITADEL |
+| **Cmd+K palette UI completo** | "Cmd+K para navegação global" (§3) | Foundation do `commandRegistry` lands; UI plena entra junto com features que registram verbos. | Massa crítica de verbos (~20+) registrados |
+
+A regra deste apêndice: **se você está prestes a propor algo aqui
+listado, releia a coluna "sinal" antes**. Se o sinal não está presente,
+adiar é a escolha certa.
+
+---
+
+**Versão**: 1.4 — Apêndice D documenta os cuts deliberados do MVP `team-contacts-unified`.
 **Data**: 2026-04-19

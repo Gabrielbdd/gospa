@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	runtimeauth "github.com/Gabrielbdd/gofra/runtime/auth"
 	runtimeconfig "github.com/Gabrielbdd/gofra/runtime/config"
@@ -59,10 +58,10 @@ func (p workspaceAuthProvider) WorkspaceAuth(ctx context.Context) (publicconfig.
 	// validates (workspace.zitadel_api_audience), not from
 	// workspace.zitadel_project_id. Today the two are equal because
 	// DeriveFresh sets api_audience = project_id, but the contract
-	// allows them to diverge (cfg.Auth.Audience can override during
-	// repair). Anchoring the browser scope on api_audience guarantees
-	// the JWT's aud claim matches what the gate expects, no matter
-	// which derivation rule produced the persisted value.
+	// allows them to diverge (cfg.Auth.Audience can override).
+	// Anchoring the browser scope on api_audience guarantees the JWT's
+	// aud claim matches what the gate expects, no matter which
+	// derivation rule produced the persisted value.
 	if ws.ZitadelApiAudience.Valid {
 		out.AudienceScope = zitadelcontract.AudienceScope(ws.ZitadelApiAudience.String)
 	}
@@ -192,28 +191,13 @@ func main() {
 		Logger:  slog.Default(),
 	}
 
-	// Recover from crashes mid-install. If the previous process died
-	// between MarkWorkspaceProvisioning and MarkWorkspaceReady/Failed,
-	// the singleton row is stuck in `provisioning` and POST /install
-	// returns FailedPrecondition forever. The old orchestrator
-	// goroutine is dead (it lived in the previous process), so it is
-	// safe to flip the state to `failed` here and let the user retry
-	// via the wizard.
-	if ws, wsErr := queries.GetWorkspace(ctx); wsErr == nil && string(ws.InstallState) == "provisioning" {
-		recoverMsg := "previous process exited during provisioning; retry from /install"
-		if err := queries.MarkWorkspaceFailed(ctx, pgtype.Text{String: recoverMsg, Valid: true}); err != nil {
-			slog.Warn("could not recover workspace from provisioning state", "error", err)
-		} else {
-			slog.Warn("workspace was stuck in provisioning; transitioned to failed so /install can retry")
-		}
-	}
-
-	// Read-repair: workspaces installed before the auth contract columns
-	// existed have NULL issuer/management/audience values. Fill them in
-	// from cfg + the existing project_id so subsequent runtime consumers
-	// (verifier, browser config) can read a populated contract. No-op
-	// for fresh, not-yet-installed, or fully-populated workspaces.
-	install.RepairAuthContract(ctx, queries, cfg, slog.Default())
+	// Pre-v1 contract: no read-repair, no backfill, no mid-install
+	// recovery. Every schema or state change assumes the operator runs
+	// a fresh install (`mise run infra:reset` + /install). If a process
+	// dies mid-install, the workspace row is stuck in `provisioning`
+	// and /install returns FailedPrecondition — the fix is to reset
+	// infra, not to have the app self-heal. See AGENTS.md "No repair
+	// before v1" rule.
 
 	// --- Health & Routing ---------------------------------------------------
 
@@ -240,11 +224,12 @@ func main() {
 	// otherwise Activate fails with ErrMiddlewareNotMounted.
 	//
 	// Reads the persisted contract directly: issuer + audience are
-	// already on the workspace row (from S5 install or read-repair).
-	// If either is still missing after the read-repair pass above, the
-	// contract is broken and the app refuses to start rather than fall
-	// back to inferring from cfg.Zitadel.AdminAPIURL like the legacy
-	// path used to.
+	// already on the workspace row (from install). If either is
+	// missing the workspace is in a broken state and the app refuses
+	// to start rather than fall back to inferring from
+	// cfg.Zitadel.AdminAPIURL like the legacy path used to. Pre-v1
+	// the fix is `mise run infra:reset` + fresh install, not
+	// self-healing.
 	if ws, wsErr := queries.GetWorkspace(ctx); wsErr == nil && string(ws.InstallState) == "ready" {
 		issuer := ""
 		if ws.ZitadelIssuerUrl.Valid {
@@ -256,10 +241,10 @@ func main() {
 		}
 		if issuer == "" || audience == "" {
 			slog.Error(
-				"workspace is ready but persisted auth contract is incomplete after read-repair; refusing to start",
+				"workspace is ready but persisted auth contract is incomplete; refusing to start",
 				"issuer_present", issuer != "",
 				"audience_present", audience != "",
-				"hint", "set GOFRA_AUTH__ISSUER and/or GOFRA_AUTH__AUDIENCE so the next startup can repair the row",
+				"hint", "pre-v1 contract: drop the DB and reinstall; no auto-repair",
 			)
 			pool.Close()
 			os.Exit(1)

@@ -1,7 +1,7 @@
 -- name: GetWorkspace :one
 -- Column order intentionally matches the workspace table's column order
--- (base columns from 00001, then the auth-contract columns added in
--- 00003) so sqlc returns the canonical Workspace model rather than a
+-- (base columns from 00001, the auth-contract columns added in 00003)
+-- so sqlc returns the canonical Workspace model rather than a
 -- query-specific row type.
 SELECT
     id,
@@ -44,20 +44,6 @@ SET
     zitadel_issuer_url     = $5,
     zitadel_management_url = $6,
     zitadel_api_audience   = $7
-WHERE id = 1;
-
--- name: RepairWorkspaceAuthContract :exec
--- Idempotent fill-in for already-installed workspaces that pre-date the
--- explicit auth contract columns. COALESCE keeps any persisted value
--- and only writes the supplied default when the column is currently
--- NULL. Pass pgtype.Text{Valid: false} for fields the caller cannot
--- safely derive (e.g. audience when both cfg.Auth.Audience and
--- workspace.zitadel_project_id are empty) and they will be left NULL.
-UPDATE workspace
-SET
-    zitadel_issuer_url     = COALESCE(zitadel_issuer_url, $1),
-    zitadel_management_url = COALESCE(zitadel_management_url, $2),
-    zitadel_api_audience   = COALESCE(zitadel_api_audience, $3)
 WHERE id = 1;
 
 -- name: MarkWorkspaceReady :exec

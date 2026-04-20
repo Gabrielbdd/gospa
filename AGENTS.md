@@ -142,6 +142,56 @@ Every non-trivial task follows this sequence:
    in [`docs/project/agent-workflow.md`](docs/project/agent-workflow.md)
    and keep a progress file current.
 
+### No repair before v1 (hard rule)
+
+**Pre-v1, every schema or state change assumes the operator runs a fresh
+install.** There is no read-repair, no backfill, no migration data shim, no
+mid-install crash recovery, no "the app self-heals on boot" code. Period.
+
+When a feature appears to need "what about workspaces installed before this
+change?" thinking, the answer is: `mise run infra:reset` + reinstall. That
+is the contract. Document it; do not work around it.
+
+**Why this is a rule, not a guideline:**
+
+- Pre-v1 there are no production users. There is no persistent data we
+  cannot drop. The only "users" are the developers themselves, and the
+  developer workflow is destroy-and-recreate constantly.
+- Backfill / repair code carries permanent maintenance cost (it must keep
+  working as the schema evolves; it adds risk to every later change; it
+  needs deprecation cycles). For pre-v1, that cost buys nothing.
+- The repair pattern is contagious — once one read-repair exists, the
+  next agent (human or AI) will follow the precedent without questioning
+  it. This rule exists to break the chain.
+
+**What to do when you spot the pattern proposed:**
+
+- In a design / spec / proposal: reject it. Cite this rule. Suggest the
+  fresh-install path instead.
+- In a code review: reject the PR. The author should remove the
+  repair/backfill/recovery code and document the reset path instead.
+- In your own implementation: stop. Re-read this rule. Replace the
+  "self-heal" path with a clear log message + documented operator
+  action.
+
+**Examples of the pattern (all banned pre-v1):**
+
+- Startup hook that backfills missing rows by querying an external system
+  (e.g. ZITADEL Management API to reconstruct lost local state).
+- Startup hook that flips a workspace stuck in a transient state
+  (`provisioning`, `migrating`, etc.) to a recoverable state.
+- Migration that does INSERT/UPDATE on existing rows beyond strict schema
+  evolution (column add/drop, index add/drop, constraint change).
+- Code that reads a NULL column and infers what it "should have been".
+- Any code path whose only justification is "in case the operator
+  upgraded from a pre-X version".
+
+**When does this rule relax?** Only when v1 ships and there is a
+production deploy with persistent data we cannot drop. At that point the
+discussion reopens — and the bar for re-introducing repair-style patterns
+becomes "operator runs an explicit `gospa migrate` (or equivalent)
+command", not "app silently self-heals on every boot".
+
 ### Framework vs product boundary
 
 If a task touches generic behavior that any Gofra-based app would want

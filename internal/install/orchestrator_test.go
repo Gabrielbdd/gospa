@@ -21,18 +21,27 @@ import (
 // fakeQueries is a hand-written stand-in for the sqlc Queries struct,
 // capturing every state transition for assertions.
 type fakeQueries struct {
-	mu              sync.Mutex
-	workspace       sqlc.Workspace
+	mu                 sync.Mutex
+	workspace          sqlc.Workspace
 	markedProvisioning sqlc.MarkWorkspaceProvisioningParams
-	markedReady     bool
-	markedFailedErr pgtype.Text
-	persistedIDs    sqlc.PersistZitadelIDsParams
+	markedReady        bool
+	markedFailedErr    pgtype.Text
+	persistedIDs       sqlc.PersistZitadelIDsParams
 
-	getWorkspaceErr       error
-	markProvisioningErr   error
-	markReadyErr          error
-	markFailedErr         error
-	persistIDsErr         error
+	createdWorkspaceCompanyParams sqlc.CreateWorkspaceCompanyParams
+	createdWorkspaceCompany       sqlc.Company
+	createdContactParams          sqlc.CreateContactParams
+	createdContact                sqlc.Contact
+	createdGrantParams            sqlc.CreateWorkspaceGrantParams
+
+	getWorkspaceErr           error
+	markProvisioningErr       error
+	markReadyErr              error
+	markFailedErr             error
+	persistIDsErr             error
+	createWorkspaceCompanyErr error
+	createContactErr          error
+	createGrantErr            error
 }
 
 func (f *fakeQueries) GetWorkspace(ctx context.Context) (sqlc.Workspace, error) {
@@ -67,12 +76,60 @@ func (f *fakeQueries) PersistZitadelIDs(ctx context.Context, arg sqlc.PersistZit
 	return f.persistIDsErr
 }
 
-// RepairWorkspaceAuthContract is part of the install.Queries interface
-// for the startup read-repair path. The orchestrator never calls it,
-// so the stub is a noop here; the cmd/app integration covers it
-// elsewhere.
-func (f *fakeQueries) RepairWorkspaceAuthContract(ctx context.Context, _ sqlc.RepairWorkspaceAuthContractParams) error {
-	return nil
+func (f *fakeQueries) CreateWorkspaceCompany(ctx context.Context, arg sqlc.CreateWorkspaceCompanyParams) (sqlc.Company, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.createdWorkspaceCompanyParams = arg
+	if f.createWorkspaceCompanyErr != nil {
+		return sqlc.Company{}, f.createWorkspaceCompanyErr
+	}
+	if f.createdWorkspaceCompany.ID.Valid {
+		return f.createdWorkspaceCompany, nil
+	}
+	// Default: synthesise a row that mirrors the params so downstream
+	// CreateContact has a non-empty company_id to attach to.
+	row := sqlc.Company{
+		ID:               pgtype.UUID{Bytes: [16]byte{0xC, 0xC}, Valid: true},
+		Name:             arg.Name,
+		Slug:             arg.Slug,
+		ZitadelOrgID:     arg.ZitadelOrgID,
+		IsWorkspaceOwner: true,
+	}
+	f.createdWorkspaceCompany = row
+	return row, nil
+}
+
+func (f *fakeQueries) CreateContact(ctx context.Context, arg sqlc.CreateContactParams) (sqlc.Contact, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.createdContactParams = arg
+	if f.createContactErr != nil {
+		return sqlc.Contact{}, f.createContactErr
+	}
+	row := sqlc.Contact{
+		ID:             pgtype.UUID{Bytes: [16]byte{0xA, 0xA}, Valid: true},
+		CompanyID:      arg.CompanyID,
+		FullName:       arg.FullName,
+		Email:          arg.Email,
+		ZitadelUserID:  arg.ZitadelUserID,
+		IdentitySource: arg.IdentitySource,
+	}
+	f.createdContact = row
+	return row, nil
+}
+
+func (f *fakeQueries) CreateWorkspaceGrant(ctx context.Context, arg sqlc.CreateWorkspaceGrantParams) (sqlc.WorkspaceGrant, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.createdGrantParams = arg
+	if f.createGrantErr != nil {
+		return sqlc.WorkspaceGrant{}, f.createGrantErr
+	}
+	return sqlc.WorkspaceGrant{
+		ContactID: arg.ContactID,
+		Role:      arg.Role,
+		Status:    arg.Status,
+	}, nil
 }
 
 func newConfig(issuer, audience, adminURL string) *config.Config {
@@ -385,6 +442,87 @@ func TestOrchestrator_RecordsCleanupFailureInInstallError(t *testing.T) {
 	}
 	if !strings.Contains(msg, "ZITADEL still down") {
 		t.Errorf("install_error missing cleanup error message: %q", msg)
+	}
+}
+
+// --- Slice 0: team materialisation -----------------------------------
+
+func TestOrchestrator_MaterializesTeamBootstrap(t *testing.T) {
+	q := &fakeQueries{}
+	z := &fakeZitadel{
+		setUpOrgResp:   zitadel.SetUpOrgResponse{OrgID: "org-1", UserID: "user-1"},
+		addProjectResp: "proj-1",
+		addOIDCResp:    zitadel.AddOIDCAppResponse{AppID: "app-1", ClientID: "cli-1"},
+	}
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Config:  newConfig("https://issuer.example.com", "", "https://admin.example.com"),
+		Logger:  newLogger(),
+	}
+
+	if err := o.Run(context.Background(), newInput()); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// MSP company materialised with the workspace name + org id.
+	if q.createdWorkspaceCompanyParams.Name != "Acme MSP" {
+		t.Errorf("workspace company name = %q; want Acme MSP", q.createdWorkspaceCompanyParams.Name)
+	}
+	if q.createdWorkspaceCompanyParams.ZitadelOrgID != "org-1" {
+		t.Errorf("workspace company zitadel_org_id = %q; want org-1", q.createdWorkspaceCompanyParams.ZitadelOrgID)
+	}
+
+	// Admin contact attached to the MSP company with the recovered
+	// identity fields. FullName is the wizard's first+last when both
+	// are present.
+	if !q.createdContactParams.ZitadelUserID.Valid || q.createdContactParams.ZitadelUserID.String != "user-1" {
+		t.Errorf("contact zitadel_user_id = %+v; want user-1", q.createdContactParams.ZitadelUserID)
+	}
+	if q.createdContactParams.FullName != "Adam Admin" {
+		t.Errorf("contact full_name = %q; want Adam Admin", q.createdContactParams.FullName)
+	}
+	if !q.createdContactParams.Email.Valid || q.createdContactParams.Email.String != "admin@acme.test" {
+		t.Errorf("contact email = %+v; want admin@acme.test", q.createdContactParams.Email)
+	}
+	if q.createdContactParams.IdentitySource != "manual" {
+		t.Errorf("contact identity_source = %q; want manual", q.createdContactParams.IdentitySource)
+	}
+
+	// Admin grant points at the contact, role admin, status active.
+	if q.createdGrantParams.Role != sqlc.WorkspaceRoleAdmin {
+		t.Errorf("grant role = %q; want admin", q.createdGrantParams.Role)
+	}
+	if q.createdGrantParams.Status != sqlc.GrantStatusActive {
+		t.Errorf("grant status = %q; want active", q.createdGrantParams.Status)
+	}
+}
+
+func TestOrchestrator_CleansUpOrgOnTeamMaterialisationFailure(t *testing.T) {
+	q := &fakeQueries{createContactErr: errors.New("contact insert failed")}
+	z := &fakeZitadel{
+		setUpOrgResp:   zitadel.SetUpOrgResponse{OrgID: "org-1", UserID: "user-1"},
+		addProjectResp: "proj-1",
+		addOIDCResp:    zitadel.AddOIDCAppResponse{AppID: "app-1", ClientID: "cli-1"},
+	}
+	o := install.Orchestrator{
+		Queries: q,
+		Zitadel: z,
+		Config:  newConfig("", "", "https://admin.example.com"),
+		Logger:  newLogger(),
+	}
+
+	if err := o.Run(context.Background(), newInput()); err == nil {
+		t.Fatal("expected error from CreateContact failure")
+	}
+	if len(z.removeOrgCalls) != 1 || z.removeOrgCalls[0] != "org-1" {
+		t.Errorf("RemoveOrg calls = %v; want [org-1] (cascade after team materialisation failure)", z.removeOrgCalls)
+	}
+	if !strings.Contains(q.markedFailedErr.String, "materialize_team") {
+		t.Errorf("install_error = %q; want to mention materialize_team", q.markedFailedErr.String)
+	}
+	if q.markedReady {
+		t.Error("workspace must not be marked ready when team materialisation fails")
 	}
 }
 

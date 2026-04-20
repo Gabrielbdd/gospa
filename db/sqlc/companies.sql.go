@@ -14,7 +14,9 @@ import (
 const archiveCompany = `-- name: ArchiveCompany :exec
 UPDATE companies
 SET archived_at = now()
-WHERE id = $1 AND archived_at IS NULL
+WHERE id = $1
+  AND archived_at IS NULL
+  AND is_workspace_owner = FALSE
 `
 
 func (q *Queries) ArchiveCompany(ctx context.Context, id pgtype.UUID) error {
@@ -25,13 +27,7 @@ func (q *Queries) ArchiveCompany(ctx context.Context, id pgtype.UUID) error {
 const createCompany = `-- name: CreateCompany :one
 INSERT INTO companies (name, slug, zitadel_org_id)
 VALUES ($1, $2, $3)
-RETURNING
-    id,
-    name,
-    slug,
-    zitadel_org_id,
-    created_at,
-    archived_at
+RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
 `
 
 type CreateCompanyParams struct {
@@ -50,18 +46,60 @@ func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (C
 		&i.ZitadelOrgID,
 		&i.CreatedAt,
 		&i.ArchivedAt,
+		&i.IsWorkspaceOwner,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.Region,
+		&i.PostalCode,
+		&i.Country,
+		&i.Timezone,
+	)
+	return i, err
+}
+
+const createWorkspaceCompany = `-- name: CreateWorkspaceCompany :one
+INSERT INTO companies (name, slug, zitadel_org_id, is_workspace_owner)
+VALUES ($1, $2, $3, TRUE)
+RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
+`
+
+type CreateWorkspaceCompanyParams struct {
+	Name         string `json:"name"`
+	Slug         string `json:"slug"`
+	ZitadelOrgID string `json:"zitadel_org_id"`
+}
+
+// Materialised by the install orchestrator to give the MSP a
+// first-class companies row. The zitadel_org_id supplied here is the
+// workspace org id — no new ZITADEL organisation is created.
+// is_workspace_owner = TRUE is what the partial unique index in 00004
+// enforces, so a buggy code path can't accidentally insert a second
+// row of this kind.
+func (q *Queries) CreateWorkspaceCompany(ctx context.Context, arg CreateWorkspaceCompanyParams) (Company, error) {
+	row := q.db.QueryRow(ctx, createWorkspaceCompany, arg.Name, arg.Slug, arg.ZitadelOrgID)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.ZitadelOrgID,
+		&i.CreatedAt,
+		&i.ArchivedAt,
+		&i.IsWorkspaceOwner,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.Region,
+		&i.PostalCode,
+		&i.Country,
+		&i.Timezone,
 	)
 	return i, err
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT
-    id,
-    name,
-    slug,
-    zitadel_org_id,
-    created_at,
-    archived_at
+SELECT id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
 FROM companies
 WHERE id = $1 AND archived_at IS NULL
 `
@@ -76,23 +114,58 @@ func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, erro
 		&i.ZitadelOrgID,
 		&i.CreatedAt,
 		&i.ArchivedAt,
+		&i.IsWorkspaceOwner,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.Region,
+		&i.PostalCode,
+		&i.Country,
+		&i.Timezone,
+	)
+	return i, err
+}
+
+const getWorkspaceCompany = `-- name: GetWorkspaceCompany :one
+SELECT id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
+FROM companies
+WHERE is_workspace_owner = TRUE
+LIMIT 1
+`
+
+// Returns the singleton MSP row. Used by /settings/workspace (Slice 5).
+func (q *Queries) GetWorkspaceCompany(ctx context.Context) (Company, error) {
+	row := q.db.QueryRow(ctx, getWorkspaceCompany)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.ZitadelOrgID,
+		&i.CreatedAt,
+		&i.ArchivedAt,
+		&i.IsWorkspaceOwner,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.Region,
+		&i.PostalCode,
+		&i.Country,
+		&i.Timezone,
 	)
 	return i, err
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT
-    id,
-    name,
-    slug,
-    zitadel_org_id,
-    created_at,
-    archived_at
+SELECT id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
 FROM companies
 WHERE archived_at IS NULL
+  AND is_workspace_owner = FALSE
 ORDER BY created_at DESC
 `
 
+// Excludes the MSP row so the operator-facing companies list never
+// shows a customer-shaped record that isn't a customer.
 func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 	rows, err := q.db.Query(ctx, listCompanies)
 	if err != nil {
@@ -109,6 +182,14 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 			&i.ZitadelOrgID,
 			&i.CreatedAt,
 			&i.ArchivedAt,
+			&i.IsWorkspaceOwner,
+			&i.AddressLine1,
+			&i.AddressLine2,
+			&i.City,
+			&i.Region,
+			&i.PostalCode,
+			&i.Country,
+			&i.Timezone,
 		); err != nil {
 			return nil, err
 		}

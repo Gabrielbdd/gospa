@@ -34,8 +34,8 @@ WHERE id = 1
 `
 
 // Column order intentionally matches the workspace table's column order
-// (base columns from 00001, then the auth-contract columns added in
-// 00003) so sqlc returns the canonical Workspace model rather than a
+// (base columns from 00001, the auth-contract columns added in 00003)
+// so sqlc returns the canonical Workspace model rather than a
 // query-specific row type.
 func (q *Queries) GetWorkspace(ctx context.Context) (Workspace, error) {
 	row := q.db.QueryRow(ctx, getWorkspace)
@@ -150,31 +150,5 @@ func (q *Queries) PersistZitadelIDs(ctx context.Context, arg PersistZitadelIDsPa
 		arg.ZitadelManagementUrl,
 		arg.ZitadelApiAudience,
 	)
-	return err
-}
-
-const repairWorkspaceAuthContract = `-- name: RepairWorkspaceAuthContract :exec
-UPDATE workspace
-SET
-    zitadel_issuer_url     = COALESCE(zitadel_issuer_url, $1),
-    zitadel_management_url = COALESCE(zitadel_management_url, $2),
-    zitadel_api_audience   = COALESCE(zitadel_api_audience, $3)
-WHERE id = 1
-`
-
-type RepairWorkspaceAuthContractParams struct {
-	ZitadelIssuerUrl     pgtype.Text `json:"zitadel_issuer_url"`
-	ZitadelManagementUrl pgtype.Text `json:"zitadel_management_url"`
-	ZitadelApiAudience   pgtype.Text `json:"zitadel_api_audience"`
-}
-
-// Idempotent fill-in for already-installed workspaces that pre-date the
-// explicit auth contract columns. COALESCE keeps any persisted value
-// and only writes the supplied default when the column is currently
-// NULL. Pass pgtype.Text{Valid: false} for fields the caller cannot
-// safely derive (e.g. audience when both cfg.Auth.Audience and
-// workspace.zitadel_project_id are empty) and they will be left NULL.
-func (q *Queries) RepairWorkspaceAuthContract(ctx context.Context, arg RepairWorkspaceAuthContractParams) error {
-	_, err := q.db.Exec(ctx, repairWorkspaceAuthContract, arg.ZitadelIssuerUrl, arg.ZitadelManagementUrl, arg.ZitadelApiAudience)
 	return err
 }

@@ -11,26 +11,69 @@ import (
 )
 
 type Querier interface {
+	// Idempotent first-sign-in transition. Only flips when the grant is
+	// currently 'not_signed_in_yet', so concurrent activations cannot
+	// accidentally clobber a later 'suspended' state. Called by the authz
+	// middleware on every authenticated request whose grant is pending —
+	// the WHERE clause makes it a no-op for already-active rows.
+	ActivatePendingGrant(ctx context.Context, contactID pgtype.UUID) error
 	ArchiveCompany(ctx context.Context, id pgtype.UUID) error
+	// Used by the last-admin invariant to short-circuit demote/suspend/
+	// archive operations that would leave zero active admins. The partial
+	// index workspace_grants_active_admins from 00007 makes this a
+	// micro-cheap lookup.
+	CountActiveAdmins(ctx context.Context) (int64, error)
 	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
+	// Inserts a contact in the given company. Identity columns
+	// (zitadel_user_id, identity_source, external_id) are accepted as
+	// explicit parameters so the install orchestrator + invite flow can
+	// supply them; the contacts handler defaults identity_source to
+	// 'manual' app-side when omitted.
+	CreateContact(ctx context.Context, arg CreateContactParams) (Contact, error)
+	// Materialised by the install orchestrator to give the MSP a
+	// first-class companies row. The zitadel_org_id supplied here is the
+	// workspace org id — no new ZITADEL organisation is created.
+	// is_workspace_owner = TRUE is what the partial unique index in 00004
+	// enforces, so a buggy code path can't accidentally insert a second
+	// row of this kind.
+	CreateWorkspaceCompany(ctx context.Context, arg CreateWorkspaceCompanyParams) (Company, error)
+	// Inserts the grant for a contact. Status defaults to 'active' for the
+	// install-time admin grant; the team invite flow will pass
+	// 'not_signed_in_yet' for new members.
+	CreateWorkspaceGrant(ctx context.Context, arg CreateWorkspaceGrantParams) (WorkspaceGrant, error)
 	GetCompany(ctx context.Context, id pgtype.UUID) (Company, error)
+	GetGrantByContactID(ctx context.Context, contactID pgtype.UUID) (WorkspaceGrant, error)
 	// Column order intentionally matches the workspace table's column order
-	// (base columns from 00001, then the auth-contract columns added in
-	// 00003) so sqlc returns the canonical Workspace model rather than a
+	// (base columns from 00001, the auth-contract columns added in 00003)
+	// so sqlc returns the canonical Workspace model rather than a
 	// query-specific row type.
 	GetWorkspace(ctx context.Context) (Workspace, error)
+	// Returns the singleton MSP row. Used by /settings/workspace (Slice 5).
+	GetWorkspaceCompany(ctx context.Context) (Company, error)
+	// Excludes the MSP row so the operator-facing companies list never
+	// shows a customer-shaped record that isn't a customer.
 	ListCompanies(ctx context.Context) ([]Company, error)
 	MarkWorkspaceFailed(ctx context.Context, installError pgtype.Text) error
 	MarkWorkspaceProvisioning(ctx context.Context, arg MarkWorkspaceProvisioningParams) error
 	MarkWorkspaceReady(ctx context.Context) error
 	PersistZitadelIDs(ctx context.Context, arg PersistZitadelIDsParams) error
-	// Idempotent fill-in for already-installed workspaces that pre-date the
-	// explicit auth contract columns. COALESCE keeps any persisted value
-	// and only writes the supplied default when the column is currently
-	// NULL. Pass pgtype.Text{Valid: false} for fields the caller cannot
-	// safely derive (e.g. audience when both cfg.Auth.Audience and
-	// workspace.zitadel_project_id are empty) and they will be left NULL.
-	RepairWorkspaceAuthContract(ctx context.Context, arg RepairWorkspaceAuthContractParams) error
+	// Single-query authz resolution used by internal/authz/middleware.
+	// Joins contacts to its (optional) workspace_grants row, returning
+	// everything the middleware needs in one round-trip:
+	//   * contact_id      — request context
+	//   * role            — policy enforcement
+	//   * grant_status    — suspended / not_signed_in_yet / active branches
+	//   * last_seen_at    — throttled update decision
+	// LEFT JOIN keeps a contact-without-grant valid; the middleware then
+	// decides 401 vs 403 based on whether the grant exists.
+	ResolveTeamCallerByZitadelUserID(ctx context.Context, zitadelUserID pgtype.Text) (ResolveTeamCallerByZitadelUserIDRow, error)
+	// Throttled in-memory by the middleware; this query is fired only when
+	// the in-memory check decides the persisted value is stale. Setting
+	// last_seen_at = now() unconditionally is intentional: the throttle
+	// already absorbed the high-frequency case.
+	TouchLastSeen(ctx context.Context, contactID pgtype.UUID) error
+	UpdateGrantRole(ctx context.Context, arg UpdateGrantRoleParams) error
+	UpdateGrantStatus(ctx context.Context, arg UpdateGrantStatusParams) error
 }
 
 var _ Querier = (*Queries)(nil)
