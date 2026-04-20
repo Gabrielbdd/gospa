@@ -21,6 +21,7 @@ import (
 	"github.com/Gabrielbdd/gospa/gen/gospa/companies/v1/companiesv1connect"
 	"github.com/Gabrielbdd/gospa/gen/gospa/install/v1/installv1connect"
 	"github.com/Gabrielbdd/gospa/internal/authgate"
+	"github.com/Gabrielbdd/gospa/internal/authz"
 	"github.com/Gabrielbdd/gospa/internal/companies"
 	"github.com/Gabrielbdd/gospa/internal/install"
 	"github.com/Gabrielbdd/gospa/internal/installtoken"
@@ -160,10 +161,12 @@ func main() {
 	// audience come from the persisted auth contract on every Activate
 	// call, so deploys can rotate either independently of the static
 	// app config.
-	gate := authgate.New(runtimeauth.PublicProcedures(
+	publicProcedures := runtimeauth.PublicProcedures(
 		installv1connect.InstallServiceGetStatusProcedure,
 		installv1connect.InstallServiceInstallProcedure,
-	))
+	)
+	gate := authgate.New(publicProcedures)
+	authzMiddleware := authz.New(queries, publicProcedures, slog.Default())
 
 	installOrchestrator := &install.Orchestrator{
 		Queries: queries,
@@ -213,9 +216,14 @@ func main() {
 	root.Handle(runtimehealth.DefaultReadinessPath, health.ReadinessHandler())
 
 	// App router. The auth gate is always mounted; it no-ops until the
-	// install orchestrator activates it.
+	// install orchestrator activates it. The authz middleware sits
+	// after the gate so the gate's JWT validation has already
+	// populated runtimeauth.User by the time authz runs. Both layers
+	// share the same publicProcedures matcher so install / public
+	// config bypass authentication AND authorization.
 	app := chi.NewRouter()
 	app.Use(gate.Middleware)
+	app.Use(authzMiddleware.Wrap)
 
 	// Eager activation for established deployments: if the workspace is
 	// already installed (pod restart, container rolling update), turn
