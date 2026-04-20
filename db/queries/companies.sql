@@ -1,6 +1,9 @@
 -- name: CreateCompany :one
-INSERT INTO companies (name, slug, zitadel_org_id)
-VALUES ($1, $2, $3)
+-- slug column defaults to ''. Wave 2 of the slug removal plan drops
+-- the column entirely; until then the handler never writes a
+-- meaningful slug value.
+INSERT INTO companies (name, zitadel_org_id)
+VALUES ($1, $2)
 RETURNING *;
 
 -- name: CreateWorkspaceCompany :one
@@ -10,8 +13,8 @@ RETURNING *;
 -- is_workspace_owner = TRUE is what the partial unique index in 00004
 -- enforces, so a buggy code path can't accidentally insert a second
 -- row of this kind.
-INSERT INTO companies (name, slug, zitadel_org_id, is_workspace_owner)
-VALUES ($1, $2, $3, TRUE)
+INSERT INTO companies (name, zitadel_org_id, is_workspace_owner)
+VALUES ($1, $2, TRUE)
 RETURNING *;
 
 -- name: GetCompany :one

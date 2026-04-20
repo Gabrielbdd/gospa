@@ -23,6 +23,9 @@ type Querier interface {
 	// index workspace_grants_active_admins from 00007 makes this a
 	// micro-cheap lookup.
 	CountActiveAdmins(ctx context.Context) (int64, error)
+	// slug column defaults to ''. Wave 2 of the slug removal plan drops
+	// the column entirely; until then the handler never writes a
+	// meaningful slug value.
 	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
 	// Inserts a contact in the given company. Identity columns
 	// (zitadel_user_id, identity_source, external_id) are accepted as
@@ -54,6 +57,8 @@ type Querier interface {
 	// shows a customer-shaped record that isn't a customer.
 	ListCompanies(ctx context.Context) ([]Company, error)
 	MarkWorkspaceFailed(ctx context.Context, installError pgtype.Text) error
+	// slug column is no longer written by the install flow (Wave 1 of
+	// slug removal). Wave 2 drops the column entirely.
 	MarkWorkspaceProvisioning(ctx context.Context, arg MarkWorkspaceProvisioningParams) error
 	MarkWorkspaceReady(ctx context.Context) error
 	PersistZitadelIDs(ctx context.Context, arg PersistZitadelIDsParams) error

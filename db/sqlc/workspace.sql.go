@@ -78,9 +78,8 @@ const markWorkspaceProvisioning = `-- name: MarkWorkspaceProvisioning :exec
 UPDATE workspace
 SET
     name          = $1,
-    slug          = $2,
-    timezone      = $3,
-    currency_code = $4,
+    timezone      = $2,
+    currency_code = $3,
     install_state = 'provisioning',
     install_error = NULL
 WHERE id = 1
@@ -88,18 +87,14 @@ WHERE id = 1
 
 type MarkWorkspaceProvisioningParams struct {
 	Name         string `json:"name"`
-	Slug         string `json:"slug"`
 	Timezone     string `json:"timezone"`
 	CurrencyCode string `json:"currency_code"`
 }
 
+// slug column is no longer written by the install flow (Wave 1 of
+// slug removal). Wave 2 drops the column entirely.
 func (q *Queries) MarkWorkspaceProvisioning(ctx context.Context, arg MarkWorkspaceProvisioningParams) error {
-	_, err := q.db.Exec(ctx, markWorkspaceProvisioning,
-		arg.Name,
-		arg.Slug,
-		arg.Timezone,
-		arg.CurrencyCode,
-	)
+	_, err := q.db.Exec(ctx, markWorkspaceProvisioning, arg.Name, arg.Timezone, arg.CurrencyCode)
 	return err
 }
 

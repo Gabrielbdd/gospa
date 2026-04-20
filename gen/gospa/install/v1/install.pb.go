@@ -251,7 +251,6 @@ func (x *InitialUser) GetPassword() string {
 type InstallRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WorkspaceName string                 `protobuf:"bytes,1,opt,name=workspace_name,json=workspaceName,proto3" json:"workspace_name,omitempty"`
-	WorkspaceSlug string                 `protobuf:"bytes,2,opt,name=workspace_slug,json=workspaceSlug,proto3" json:"workspace_slug,omitempty"`
 	Timezone      string                 `protobuf:"bytes,3,opt,name=timezone,proto3" json:"timezone,omitempty"`
 	CurrencyCode  string                 `protobuf:"bytes,4,opt,name=currency_code,json=currencyCode,proto3" json:"currency_code,omitempty"`
 	InitialUser   *InitialUser           `protobuf:"bytes,5,opt,name=initial_user,json=initialUser,proto3" json:"initial_user,omitempty"`
@@ -292,13 +291,6 @@ func (*InstallRequest) Descriptor() ([]byte, []int) {
 func (x *InstallRequest) GetWorkspaceName() string {
 	if x != nil {
 		return x.WorkspaceName
-	}
-	return ""
-}
-
-func (x *InstallRequest) GetWorkspaceSlug() string {
-	if x != nil {
-		return x.WorkspaceSlug
 	}
 	return ""
 }
@@ -386,13 +378,12 @@ const file_gospa_install_v1_install_proto_rawDesc = "" +
 	"given_name\x18\x02 \x01(\tR\tgivenName\x12\x1f\n" +
 	"\vfamily_name\x18\x03 \x01(\tR\n" +
 	"familyName\x12\x1a\n" +
-	"\bpassword\x18\x04 \x01(\tR\bpassword\"\xe1\x01\n" +
+	"\bpassword\x18\x04 \x01(\tR\bpassword\"\xd0\x01\n" +
 	"\x0eInstallRequest\x12%\n" +
-	"\x0eworkspace_name\x18\x01 \x01(\tR\rworkspaceName\x12%\n" +
-	"\x0eworkspace_slug\x18\x02 \x01(\tR\rworkspaceSlug\x12\x1a\n" +
+	"\x0eworkspace_name\x18\x01 \x01(\tR\rworkspaceName\x12\x1a\n" +
 	"\btimezone\x18\x03 \x01(\tR\btimezone\x12#\n" +
 	"\rcurrency_code\x18\x04 \x01(\tR\fcurrencyCode\x12@\n" +
-	"\finitial_user\x18\x05 \x01(\v2\x1d.gospa.install.v1.InitialUserR\vinitialUser\"G\n" +
+	"\finitial_user\x18\x05 \x01(\v2\x1d.gospa.install.v1.InitialUserR\vinitialUserJ\x04\b\x02\x10\x03R\x0eworkspace_slug\"G\n" +
 	"\x0fInstallResponse\x124\n" +
 	"\x05state\x18\x01 \x01(\x0e2\x1e.gospa.install.v1.InstallStateR\x05state*\xa3\x01\n" +
 	"\fInstallState\x12\x1d\n" +

@@ -25,19 +25,21 @@ func (q *Queries) ArchiveCompany(ctx context.Context, id pgtype.UUID) error {
 }
 
 const createCompany = `-- name: CreateCompany :one
-INSERT INTO companies (name, slug, zitadel_org_id)
-VALUES ($1, $2, $3)
+INSERT INTO companies (name, zitadel_org_id)
+VALUES ($1, $2)
 RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
 `
 
 type CreateCompanyParams struct {
 	Name         string `json:"name"`
-	Slug         string `json:"slug"`
 	ZitadelOrgID string `json:"zitadel_org_id"`
 }
 
+// slug column defaults to ”. Wave 2 of the slug removal plan drops
+// the column entirely; until then the handler never writes a
+// meaningful slug value.
 func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error) {
-	row := q.db.QueryRow(ctx, createCompany, arg.Name, arg.Slug, arg.ZitadelOrgID)
+	row := q.db.QueryRow(ctx, createCompany, arg.Name, arg.ZitadelOrgID)
 	var i Company
 	err := row.Scan(
 		&i.ID,
@@ -59,14 +61,13 @@ func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (C
 }
 
 const createWorkspaceCompany = `-- name: CreateWorkspaceCompany :one
-INSERT INTO companies (name, slug, zitadel_org_id, is_workspace_owner)
-VALUES ($1, $2, $3, TRUE)
+INSERT INTO companies (name, zitadel_org_id, is_workspace_owner)
+VALUES ($1, $2, TRUE)
 RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
 `
 
 type CreateWorkspaceCompanyParams struct {
 	Name         string `json:"name"`
-	Slug         string `json:"slug"`
 	ZitadelOrgID string `json:"zitadel_org_id"`
 }
 
@@ -77,7 +78,7 @@ type CreateWorkspaceCompanyParams struct {
 // enforces, so a buggy code path can't accidentally insert a second
 // row of this kind.
 func (q *Queries) CreateWorkspaceCompany(ctx context.Context, arg CreateWorkspaceCompanyParams) (Company, error) {
-	row := q.db.QueryRow(ctx, createWorkspaceCompany, arg.Name, arg.Slug, arg.ZitadelOrgID)
+	row := q.db.QueryRow(ctx, createWorkspaceCompany, arg.Name, arg.ZitadelOrgID)
 	var i Company
 	err := row.Scan(
 		&i.ID,

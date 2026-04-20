@@ -25,7 +25,6 @@ type Company struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Slug          string                 `protobuf:"bytes,3,opt,name=slug,proto3" json:"slug,omitempty"`
 	ZitadelOrgId  string                 `protobuf:"bytes,4,opt,name=zitadel_org_id,json=zitadelOrgId,proto3" json:"zitadel_org_id,omitempty"`
 	CreatedAt     string                 `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`    // RFC3339
 	ArchivedAt    string                 `protobuf:"bytes,6,opt,name=archived_at,json=archivedAt,proto3" json:"archived_at,omitempty"` // RFC3339, empty when active
@@ -77,13 +76,6 @@ func (x *Company) GetName() string {
 	return ""
 }
 
-func (x *Company) GetSlug() string {
-	if x != nil {
-		return x.Slug
-	}
-	return ""
-}
-
 func (x *Company) GetZitadelOrgId() string {
 	if x != nil {
 		return x.ZitadelOrgId
@@ -108,7 +100,6 @@ func (x *Company) GetArchivedAt() string {
 type CreateCompanyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Slug          string                 `protobuf:"bytes,2,opt,name=slug,proto3" json:"slug,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -146,13 +137,6 @@ func (*CreateCompanyRequest) Descriptor() ([]byte, []int) {
 func (x *CreateCompanyRequest) GetName() string {
 	if x != nil {
 		return x.Name
-	}
-	return ""
-}
-
-func (x *CreateCompanyRequest) GetSlug() string {
-	if x != nil {
-		return x.Slug
 	}
 	return ""
 }
@@ -365,19 +349,17 @@ var File_gospa_companies_v1_companies_proto protoreflect.FileDescriptor
 
 const file_gospa_companies_v1_companies_proto_rawDesc = "" +
 	"\n" +
-	"\"gospa/companies/v1/companies.proto\x12\x12gospa.companies.v1\"\xa7\x01\n" +
+	"\"gospa/companies/v1/companies.proto\x12\x12gospa.companies.v1\"\x9f\x01\n" +
 	"\aCompany\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
-	"\x04slug\x18\x03 \x01(\tR\x04slug\x12$\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12$\n" +
 	"\x0ezitadel_org_id\x18\x04 \x01(\tR\fzitadelOrgId\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\x05 \x01(\tR\tcreatedAt\x12\x1f\n" +
 	"\varchived_at\x18\x06 \x01(\tR\n" +
-	"archivedAt\">\n" +
+	"archivedAtJ\x04\b\x03\x10\x04R\x04slug\"6\n" +
 	"\x14CreateCompanyRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
-	"\x04slug\x18\x02 \x01(\tR\x04slug\"N\n" +
+	"\x04name\x18\x01 \x01(\tR\x04nameJ\x04\b\x02\x10\x03R\x04slug\"N\n" +
 	"\x15CreateCompanyResponse\x125\n" +
 	"\acompany\x18\x01 \x01(\v2\x1b.gospa.companies.v1.CompanyR\acompany\"\x16\n" +
 	"\x14ListCompaniesRequest\"R\n" +

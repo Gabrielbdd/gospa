@@ -91,7 +91,6 @@ func (f *fakeQueries) CreateWorkspaceCompany(ctx context.Context, arg sqlc.Creat
 	row := sqlc.Company{
 		ID:               pgtype.UUID{Bytes: [16]byte{0xC, 0xC}, Valid: true},
 		Name:             arg.Name,
-		Slug:             arg.Slug,
 		ZitadelOrgID:     arg.ZitadelOrgID,
 		IsWorkspaceOwner: true,
 	}
@@ -186,7 +185,6 @@ func newLogger() *slog.Logger {
 func newInput() install.Input {
 	return install.Input{
 		WorkspaceName: "Acme MSP",
-		WorkspaceSlug: "acme",
 		Timezone:      "America/Sao_Paulo",
 		CurrencyCode:  "BRL",
 		AdminEmail:    "admin@acme.test",

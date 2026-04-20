@@ -82,7 +82,6 @@ function InstallPage() {
     defaultValues: {
       installToken: "",
       workspaceName: "",
-      workspaceSlug: "",
       timezone: DEFAULT_TIMEZONE,
       currencyCode: "USD",
       email: "",
@@ -105,7 +104,6 @@ function InstallPage() {
       installMutation.mutate({
         req: {
           workspaceName: value.workspaceName,
-          workspaceSlug: value.workspaceSlug,
           timezone: value.timezone,
           currencyCode: value.currencyCode,
           initialUser: {
@@ -166,19 +164,6 @@ function InstallPage() {
                   className={inputClass}
                   value={field.state.value}
                   onChange={(e) => field.handleChange(e.target.value)}
-                  required
-                />
-              </Field>
-            )}
-          </form.Field>
-          <form.Field name="workspaceSlug">
-            {(field) => (
-              <Field label="Workspace slug" hint="lowercase, no spaces">
-                <input
-                  className={inputClass}
-                  value={field.state.value}
-                  onChange={(e) => field.handleChange(e.target.value)}
-                  pattern="[a-z0-9-]+"
                   required
                 />
               </Field>

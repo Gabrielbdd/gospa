@@ -24,12 +24,13 @@ FROM workspace
 WHERE id = 1;
 
 -- name: MarkWorkspaceProvisioning :exec
+-- slug column is no longer written by the install flow (Wave 1 of
+-- slug removal). Wave 2 drops the column entirely.
 UPDATE workspace
 SET
     name          = $1,
-    slug          = $2,
-    timezone      = $3,
-    currency_code = $4,
+    timezone      = $2,
+    currency_code = $3,
     install_state = 'provisioning',
     install_error = NULL
 WHERE id = 1;

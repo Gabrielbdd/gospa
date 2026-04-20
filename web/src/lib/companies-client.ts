@@ -9,7 +9,6 @@ import { apiCall } from "@/lib/api-client";
 export interface Company {
   id: string;
   name: string;
-  slug: string;
   zitadelOrgId: string;
   createdAt: string;
   archivedAt?: string;

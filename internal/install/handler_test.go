@@ -58,7 +58,6 @@ func newHandler(token string) *install.Handler {
 func validRequest() *connect.Request[installv1.InstallRequest] {
 	return connect.NewRequest(&installv1.InstallRequest{
 		WorkspaceName: "Acme",
-		WorkspaceSlug: "acme",
 		Timezone:      "UTC",
 		CurrencyCode:  "USD",
 		InitialUser: &installv1.InitialUser{

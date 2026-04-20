@@ -88,7 +88,6 @@ func TestCreateCompany_CreatesOrgThenPersistsRow(t *testing.T) {
 		createRow: sqlc.Company{
 			ID:           pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
 			Name:         "Acme",
-			Slug:         "acme",
 			ZitadelOrgID: "org-new",
 		},
 	}
@@ -97,7 +96,6 @@ func TestCreateCompany_CreatesOrgThenPersistsRow(t *testing.T) {
 
 	resp, err := h.CreateCompany(context.Background(), connect.NewRequest(&companiesv1.CreateCompanyRequest{
 		Name: "Acme",
-		Slug: "acme",
 	}))
 	if err != nil {
 		t.Fatalf("CreateCompany: %v", err)
@@ -124,7 +122,6 @@ func TestCreateCompany_OrgFailurePreventsRow(t *testing.T) {
 
 	_, err := h.CreateCompany(context.Background(), connect.NewRequest(&companiesv1.CreateCompanyRequest{
 		Name: "Acme",
-		Slug: "acme",
 	}))
 	if err == nil {
 		t.Fatal("expected error")
@@ -141,7 +138,6 @@ func TestCreateCompany_RequiresReadyWorkspace(t *testing.T) {
 
 	_, err := h.CreateCompany(context.Background(), connect.NewRequest(&companiesv1.CreateCompanyRequest{
 		Name: "Acme",
-		Slug: "acme",
 	}))
 	if err == nil {
 		t.Fatal("expected FailedPrecondition")
@@ -161,7 +157,6 @@ func TestCreateCompany_RejectsEmptyName(t *testing.T) {
 	h := newHandler(q, z)
 
 	_, err := h.CreateCompany(context.Background(), connect.NewRequest(&companiesv1.CreateCompanyRequest{
-		Slug: "acme",
 	}))
 	if err == nil {
 		t.Fatal("expected error")

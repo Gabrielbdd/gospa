@@ -107,7 +107,6 @@ func (h *Handler) Install(ctx context.Context, req *connect.Request[installv1.In
 
 	input := Input{
 		WorkspaceName: req.Msg.WorkspaceName,
-		WorkspaceSlug: req.Msg.WorkspaceSlug,
 		Timezone:      req.Msg.Timezone,
 		CurrencyCode:  req.Msg.CurrencyCode,
 		AdminEmail:    req.Msg.InitialUser.GetEmail(),
@@ -148,9 +147,6 @@ func validateInstallRequest(r *installv1.InstallRequest) error {
 	}
 	if r.WorkspaceName == "" {
 		return errors.New("workspace_name is required")
-	}
-	if r.WorkspaceSlug == "" {
-		return errors.New("workspace_slug is required")
 	}
 	if r.InitialUser == nil || r.InitialUser.Email == "" {
 		return errors.New("initial_user.email is required")

@@ -39,7 +39,6 @@ type Queries interface {
 // drive the six-step pipeline below.
 type Input struct {
 	WorkspaceName string
-	WorkspaceSlug string
 	Timezone      string
 	CurrencyCode  string
 	AdminEmail    string
@@ -194,7 +193,6 @@ func (o *Orchestrator) Run(ctx context.Context, in Input) error {
 	log.InfoContext(ctx, "install step starting", "step", "materialize_team")
 	mspCompany, err := o.Queries.CreateWorkspaceCompany(ctx, sqlc.CreateWorkspaceCompanyParams{
 		Name:         in.WorkspaceName,
-		Slug:         in.WorkspaceSlug,
 		ZitadelOrgID: orgResp.OrgID,
 	})
 	if err != nil {

@@ -22,7 +22,6 @@ export interface InitialUser {
 
 export interface InstallRequest {
   workspaceName: string;
-  workspaceSlug: string;
   timezone: string;
   currencyCode: string;
   initialUser: InitialUser;

@@ -53,9 +53,6 @@ func (h *Handler) CreateCompany(ctx context.Context, req *connect.Request[compan
 	if req.Msg.Name == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("name is required"))
 	}
-	if req.Msg.Slug == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("slug is required"))
-	}
 
 	orgID, err := h.Zitadel.AddOrganization(ctx, req.Msg.Name)
 	if err != nil {
@@ -64,7 +61,6 @@ func (h *Handler) CreateCompany(ctx context.Context, req *connect.Request[compan
 
 	row, err := h.Queries.CreateCompany(ctx, sqlc.CreateCompanyParams{
 		Name:         req.Msg.Name,
-		Slug:         req.Msg.Slug,
 		ZitadelOrgID: orgID,
 	})
 	if err != nil {
@@ -130,7 +126,6 @@ func toProtoCompany(r sqlc.Company) *companiesv1.Company {
 	c := &companiesv1.Company{
 		Id:           r.ID.String(),
 		Name:         r.Name,
-		Slug:         r.Slug,
 		ZitadelOrgId: r.ZitadelOrgID,
 	}
 	if r.CreatedAt.Valid {
