@@ -8,7 +8,7 @@ import { rootRoute } from "@/routes/__root";
 import { authCallbackRoute } from "@/routes/auth-callback";
 import { indexRoute } from "@/routes/index";
 import { installRoute } from "@/routes/install";
-import "@/styles.css";
+import "@/styles/index.css";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1 } },

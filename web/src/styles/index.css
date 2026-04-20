@@ -1,0 +1,154 @@
+/* =============================================================
+   Gospa Design System — Entry
+   Loads in this order:
+     1. Tailwind v4 (utility generator + preflight)
+     2. Geist + Geist Mono fonts (Google Fonts; TODO: self-host)
+     3. Raw CSS variables (tokens.css) — single source of truth
+     4. @theme block — exposes tokens to Tailwind so utilities
+        like `bg-app`, `text-fg-1`, `border-default` work
+     5. Semantic typography & element defaults (typography.css)
+
+   Kept as the single import in main.tsx. Splitting into modules
+   below is for human readability; Vite/Tailwind treat them as
+   one compiled CSS unit.
+   ============================================================= */
+
+/* Google Fonts MUST be first — CSS @import rules must precede all other
+   rules (Lightning CSS / Tailwind v4 flag this if `@import "tailwindcss"`
+   appears earlier, since it expands inline). */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* -----------------------------------------------------------
+   @theme — Tailwind v4 token map
+   Every token here generates a utility class via Tailwind's
+   automatic naming. Convention: name the var by its purpose
+   (`--color-app`, `--color-fg-1`) so the utility reads cleanly
+   (`bg-app`, `text-fg-1`).
+   Light theme overrides happen in tokens.css under
+   :root[data-theme="light"]; the @theme aliases pick them up
+   automatically because they reference var(--*) at runtime.
+   ----------------------------------------------------------- */
+@theme {
+  /* --- Color: surfaces --- */
+  --color-app:       var(--app);
+  --color-subtle:    var(--subtle);
+  --color-surface:   var(--surface);
+  --color-elevated:  var(--elevated);
+  --color-overlay:   var(--overlay);
+
+  /* --- Color: foregrounds --- */
+  --color-fg-1: var(--fg-1);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+
+  /* --- Color: borders --- */
+  --color-border-default: var(--border-default);
+  --color-border-strong:  var(--border-strong);
+  --color-border-subtle:  var(--border-subtle);
+
+  /* --- Color: accent --- */
+  --color-accent:        var(--accent);
+  --color-accent-hover:  var(--accent-hover);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-fg:     var(--accent-fg);
+
+  /* --- Color: status --- */
+  --color-success:        var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning:        var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-danger:         var(--danger);
+  --color-danger-subtle:  var(--danger-subtle);
+  --color-info:           var(--info);
+  --color-info-subtle:    var(--info-subtle);
+
+  /* --- Color: neutral scale (named utilities like bg-gray-300) --- */
+  --color-gray-100:  var(--gray-100);
+  --color-gray-200:  var(--gray-200);
+  --color-gray-300:  var(--gray-300);
+  --color-gray-400:  var(--gray-400);
+  --color-gray-500:  var(--gray-500);
+  --color-gray-600:  var(--gray-600);
+  --color-gray-700:  var(--gray-700);
+  --color-gray-800:  var(--gray-800);
+  --color-gray-900:  var(--gray-900);
+  --color-gray-1000: var(--gray-1000);
+
+  /* --- Color: focus ring --- */
+  --color-ring: var(--ring);
+
+  /* --- shadcn/ui legacy aliases ---
+     Existing components (e.g. Button) ship with shadcn token
+     names. Aliasing here keeps them functional and visually
+     consistent with the new dark-first system. */
+  --color-background:           var(--app);
+  --color-foreground:           var(--fg-1);
+  --color-card:                 var(--surface);
+  --color-card-foreground:      var(--fg-1);
+  --color-primary:              var(--gray-1000);
+  --color-primary-foreground:   var(--app);
+  --color-muted:                var(--elevated);
+  --color-muted-foreground:     var(--fg-3);
+  --color-border:               var(--border-default);
+  --color-input:                var(--border-default);
+  --color-destructive:          var(--danger);
+  --color-destructive-foreground: var(--accent-fg);
+
+  /* --- Typography --- */
+  --font-sans:    var(--font-sans);
+  --font-mono:    var(--font-mono);
+  --font-display: var(--font-display);
+
+  --text-xs:   var(--text-xs);
+  --text-sm:   var(--text-sm);
+  --text-base: var(--text-base);
+  --text-md:   var(--text-md);
+  --text-lg:   var(--text-lg);
+  --text-xl:   var(--text-xl);
+  --text-2xl:  var(--text-2xl);
+  --text-3xl:  var(--text-3xl);
+  --text-4xl:  var(--text-4xl);
+  --text-5xl:  var(--text-5xl);
+  --text-6xl:  var(--text-6xl);
+  --text-7xl:  var(--text-7xl);
+
+  --leading-tight:   var(--leading-tight);
+  --leading-snug:    var(--leading-snug);
+  --leading-normal:  var(--leading-normal);
+  --leading-relaxed: var(--leading-relaxed);
+
+  --tracking-tight:  var(--tracking-tight);
+  --tracking-snug:   var(--tracking-snug);
+  --tracking-normal: var(--tracking-normal);
+  --tracking-wide:   var(--tracking-wide);
+  --tracking-caps:   var(--tracking-caps);
+
+  /* --- Radii --- */
+  --radius-xs:   var(--radius-xs);
+  --radius-sm:   var(--radius-sm);
+  --radius-md:   var(--radius-md);
+  --radius-lg:   var(--radius-lg);
+  --radius-xl:   var(--radius-xl);
+  --radius-2xl:  var(--radius-2xl);
+  --radius-full: var(--radius-full);
+  --radius:      var(--radius-md);
+
+  /* --- Shadows --- */
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+
+  /* --- Motion --- */
+  --ease-out:    var(--ease-out);
+  --ease-in-out: var(--ease-in-out);
+  --ease-in:     var(--ease-in);
+
+  --default-transition-duration: var(--dur-base);
+  --default-transition-timing-function: var(--ease-out);
+}
+
+@import "./typography.css";

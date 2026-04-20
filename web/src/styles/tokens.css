@@ -1,0 +1,191 @@
+/* =============================================================
+   Gospa Design System — Raw Tokens
+   Vercel-inspired (Geist), shadcn-compatible aliases included.
+
+   Source of truth for every color, type, spacing, radius, shadow,
+   and motion value used in the product. Components MUST consume
+   these via Tailwind utilities (preferred) or var(--token) refs.
+   No hex codes outside this file.
+
+   Theme model: dark is default. `data-theme="light"` on <html>
+   flips the raw color vars; Tailwind utilities follow automatically
+   because the @theme block in index.css aliases against these.
+   ============================================================= */
+
+:root {
+  /* ---------------------------------------------------------
+     NEUTRAL SCALE (dark-first, ascending = more prominent)
+     --------------------------------------------------------- */
+  --gray-100:  #0a0a0a;
+  --gray-200:  #111111;
+  --gray-300:  #1a1a1a;
+  --gray-400:  #242424;
+  --gray-500:  #2e2e2e;
+  --gray-600:  #454545;
+  --gray-700:  #8f8f8f;
+  --gray-800:  #a1a1a1;
+  --gray-900:  #ededed;
+  --gray-1000: #ffffff;
+
+  /* ---------------------------------------------------------
+     SEMANTIC FOREGROUNDS / BACKGROUNDS
+     --------------------------------------------------------- */
+  --fg-1: #ffffff;          /* primary text */
+  --fg-2: #a1a1a1;          /* secondary text */
+  --fg-3: #8f8f8f;          /* tertiary / muted */
+  --fg-4: #666666;          /* quaternary / placeholder */
+
+  --app:       #000000;     /* app shell background */
+  --subtle:    #0a0a0a;     /* subtle surface (rails, footers) */
+  --surface:   #111111;     /* cards, panels, kbd backgrounds */
+  --elevated:  #1a1a1a;     /* menus, popovers, focused rows */
+  --overlay:   rgba(0,0,0,0.72);  /* modal scrim */
+
+  /* ---------------------------------------------------------
+     BORDERS
+     --------------------------------------------------------- */
+  --border-default: #242424;
+  --border-strong:  #333333;
+  --border-subtle:  #1a1a1a;
+
+  /* ---------------------------------------------------------
+     ACCENT (Vercel Blue)
+     --------------------------------------------------------- */
+  --accent:        #0070f3;
+  --accent-hover:  #3291ff;
+  --accent-subtle: rgba(0,112,243,0.12);
+  --accent-fg:     #ffffff;
+
+  /* ---------------------------------------------------------
+     STATUS
+     --------------------------------------------------------- */
+  --success:        #0cce6b;
+  --success-subtle: rgba(12,206,107,0.12);
+  --warning:        #f5a623;
+  --warning-subtle: rgba(245,166,35,0.12);
+  --danger:         #ff4d4f;
+  --danger-subtle:  rgba(255,77,79,0.12);
+  --info:           #0070f3;
+  --info-subtle:    rgba(0,112,243,0.12);
+
+  /* ---------------------------------------------------------
+     FOCUS RING
+     --------------------------------------------------------- */
+  --ring:        #3291ff;
+  --ring-offset: #000000;
+
+  /* ---------------------------------------------------------
+     TYPE
+     Geist via Google Fonts for portability. TODO: swap to
+     `@fontsource-variable/geist` for self-hosted, no external
+     network call, before first production deploy.
+     --------------------------------------------------------- */
+  --font-sans:    'Geist', ui-sans-serif, system-ui, -apple-system,
+                  'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, 'SF Mono', Menlo,
+                  Consolas, monospace;
+  --font-display: var(--font-sans);
+
+  /* Modular scale, 1.125 minor third */
+  --text-xs:  12px;
+  --text-sm:  13px;
+  --text-base: 14px;
+  --text-md:  15px;
+  --text-lg:  17px;
+  --text-xl:  20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 38px;
+  --text-5xl: 48px;
+  --text-6xl: 64px;
+  --text-7xl: 80px;
+
+  --leading-tight:   1.1;
+  --leading-snug:    1.25;
+  --leading-normal:  1.5;
+  --leading-relaxed: 1.65;
+
+  --tracking-tight:  -0.025em;
+  --tracking-snug:   -0.015em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.02em;
+  --tracking-caps:   0.08em;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* ---------------------------------------------------------
+     RADII
+     --------------------------------------------------------- */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;        /* shadcn default */
+  --radius-lg:  10px;
+  --radius-xl:  12px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* ---------------------------------------------------------
+     SHADOWS — low-elevation, high-clarity (Vercel-like)
+     --------------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5), 0 1px 2px rgba(0,0,0,0.6);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.5);
+  --shadow-xl: 0 24px 64px rgba(0,0,0,0.7);
+  --shadow-border-inset: inset 0 0 0 1px var(--border-default);
+  --shadow-focus: 0 0 0 2px var(--ring-offset), 0 0 0 4px var(--ring);
+
+  /* ---------------------------------------------------------
+     MOTION
+     --------------------------------------------------------- */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-in:     cubic-bezier(0.4, 0, 1, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 260ms;
+}
+
+/* =============================================================
+   LIGHT THEME
+   Activate by setting `data-theme="light"` on <html>. Only the
+   raw color vars change; everything else (type, radii, motion)
+   is shared.
+   ============================================================= */
+
+:root[data-theme="light"] {
+  --gray-100:  #fafafa;
+  --gray-200:  #f5f5f5;
+  --gray-300:  #ededed;
+  --gray-400:  #e0e0e0;
+  --gray-500:  #cfcfcf;
+  --gray-600:  #a1a1a1;
+  --gray-700:  #737373;
+  --gray-800:  #525252;
+  --gray-900:  #171717;
+  --gray-1000: #000000;
+
+  --fg-1: #000000;
+  --fg-2: #525252;
+  --fg-3: #737373;
+  --fg-4: #a1a1a1;
+
+  --app:       #ffffff;
+  --subtle:    #fafafa;
+  --surface:   #ffffff;
+  --elevated:  #ffffff;
+  --overlay:   rgba(0,0,0,0.4);
+
+  --border-default: #ededed;
+  --border-strong:  #d4d4d4;
+  --border-subtle:  #f5f5f5;
+
+  --ring-offset: #ffffff;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+  --shadow-xl: 0 24px 64px rgba(0,0,0,0.1);
+}
