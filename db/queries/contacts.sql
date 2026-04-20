@@ -40,3 +40,43 @@ SELECT EXISTS(
       AND lower(email) = lower($2)
       AND archived_at IS NULL
 ) AS found;
+
+-- name: ListContactsByCompany :many
+-- Returns every active contact at the given company, ordered by name
+-- so the UI's default sort is stable. Excludes archived rows.
+SELECT *
+FROM contacts
+WHERE company_id = $1
+  AND archived_at IS NULL
+ORDER BY lower(full_name) ASC;
+
+-- name: UpdateContact :one
+-- Updates the mutable fields of a contact. Columns the app never
+-- exposes (company_id, zitadel_user_id, identity_source, external_id)
+-- are intentionally absent — moving a contact between companies or
+-- changing its identity source are separate operations.
+UPDATE contacts
+SET
+    full_name = $2,
+    job_title = $3,
+    email     = $4,
+    phone     = $5,
+    mobile    = $6,
+    notes     = $7
+WHERE id = $1
+  AND archived_at IS NULL
+RETURNING *;
+
+-- name: ArchiveContact :exec
+UPDATE contacts
+SET archived_at = now()
+WHERE id = $1
+  AND archived_at IS NULL;
+
+-- name: ContactHasWorkspaceGrant :one
+-- Used by ArchiveContact to refuse archiving a contact that backs a
+-- team member — the team-suspend flow is the right removal path.
+SELECT EXISTS(
+    SELECT 1 FROM workspace_grants
+    WHERE contact_id = $1
+) AS found;

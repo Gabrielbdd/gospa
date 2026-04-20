@@ -21,20 +21,123 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Company struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	ZitadelOrgId  string                 `protobuf:"bytes,4,opt,name=zitadel_org_id,json=zitadelOrgId,proto3" json:"zitadel_org_id,omitempty"`
-	CreatedAt     string                 `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`    // RFC3339
-	ArchivedAt    string                 `protobuf:"bytes,6,opt,name=archived_at,json=archivedAt,proto3" json:"archived_at,omitempty"` // RFC3339, empty when active
+// Address groups the operator-facing address fields shared by every
+// company (customer and workspace-owner alike). Fields are optional —
+// empty strings are valid and common for MVP rows.
+type Address struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Line1      string                 `protobuf:"bytes,1,opt,name=line1,proto3" json:"line1,omitempty"`
+	Line2      string                 `protobuf:"bytes,2,opt,name=line2,proto3" json:"line2,omitempty"`
+	City       string                 `protobuf:"bytes,3,opt,name=city,proto3" json:"city,omitempty"`
+	Region     string                 `protobuf:"bytes,4,opt,name=region,proto3" json:"region,omitempty"`
+	PostalCode string                 `protobuf:"bytes,5,opt,name=postal_code,json=postalCode,proto3" json:"postal_code,omitempty"`
+	Country    string                 `protobuf:"bytes,6,opt,name=country,proto3" json:"country,omitempty"`
+	// Timezone is an IANA zone id (e.g. "America/Sao_Paulo"). Defaults
+	// to "UTC" when a row is created without one.
+	Timezone      string `protobuf:"bytes,7,opt,name=timezone,proto3" json:"timezone,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
+func (x *Address) Reset() {
+	*x = Address{}
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Address) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Address) ProtoMessage() {}
+
+func (x *Address) ProtoReflect() protoreflect.Message {
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Address.ProtoReflect.Descriptor instead.
+func (*Address) Descriptor() ([]byte, []int) {
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Address) GetLine1() string {
+	if x != nil {
+		return x.Line1
+	}
+	return ""
+}
+
+func (x *Address) GetLine2() string {
+	if x != nil {
+		return x.Line2
+	}
+	return ""
+}
+
+func (x *Address) GetCity() string {
+	if x != nil {
+		return x.City
+	}
+	return ""
+}
+
+func (x *Address) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *Address) GetPostalCode() string {
+	if x != nil {
+		return x.PostalCode
+	}
+	return ""
+}
+
+func (x *Address) GetCountry() string {
+	if x != nil {
+		return x.Country
+	}
+	return ""
+}
+
+func (x *Address) GetTimezone() string {
+	if x != nil {
+		return x.Timezone
+	}
+	return ""
+}
+
+type Company struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Id           string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name         string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	ZitadelOrgId string                 `protobuf:"bytes,4,opt,name=zitadel_org_id,json=zitadelOrgId,proto3" json:"zitadel_org_id,omitempty"`
+	CreatedAt    string                 `protobuf:"bytes,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`    // RFC3339
+	ArchivedAt   string                 `protobuf:"bytes,6,opt,name=archived_at,json=archivedAt,proto3" json:"archived_at,omitempty"` // RFC3339, empty when active
+	Address      *Address               `protobuf:"bytes,7,opt,name=address,proto3" json:"address,omitempty"`
+	// is_workspace_owner is always FALSE in ListCompanies responses
+	// (the MSP row is filtered out). Populated on GetWorkspaceCompany
+	// and on UpdateWorkspaceCompanyResponse so the SPA can assert the
+	// row it just fetched really is the MSP.
+	IsWorkspaceOwner bool `protobuf:"varint,8,opt,name=is_workspace_owner,json=isWorkspaceOwner,proto3" json:"is_workspace_owner,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
 func (x *Company) Reset() {
 	*x = Company{}
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[0]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -46,7 +149,7 @@ func (x *Company) String() string {
 func (*Company) ProtoMessage() {}
 
 func (x *Company) ProtoReflect() protoreflect.Message {
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[0]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59,7 +162,7 @@ func (x *Company) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Company.ProtoReflect.Descriptor instead.
 func (*Company) Descriptor() ([]byte, []int) {
-	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{0}
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *Company) GetId() string {
@@ -97,16 +200,31 @@ func (x *Company) GetArchivedAt() string {
 	return ""
 }
 
+func (x *Company) GetAddress() *Address {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+func (x *Company) GetIsWorkspaceOwner() bool {
+	if x != nil {
+		return x.IsWorkspaceOwner
+	}
+	return false
+}
+
 type CreateCompanyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Address       *Address               `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateCompanyRequest) Reset() {
 	*x = CreateCompanyRequest{}
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[1]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -118,7 +236,7 @@ func (x *CreateCompanyRequest) String() string {
 func (*CreateCompanyRequest) ProtoMessage() {}
 
 func (x *CreateCompanyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[1]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -131,7 +249,7 @@ func (x *CreateCompanyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCompanyRequest.ProtoReflect.Descriptor instead.
 func (*CreateCompanyRequest) Descriptor() ([]byte, []int) {
-	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{1}
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CreateCompanyRequest) GetName() string {
@@ -139,6 +257,13 @@ func (x *CreateCompanyRequest) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *CreateCompanyRequest) GetAddress() *Address {
+	if x != nil {
+		return x.Address
+	}
+	return nil
 }
 
 type CreateCompanyResponse struct {
@@ -150,7 +275,7 @@ type CreateCompanyResponse struct {
 
 func (x *CreateCompanyResponse) Reset() {
 	*x = CreateCompanyResponse{}
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[2]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -162,7 +287,7 @@ func (x *CreateCompanyResponse) String() string {
 func (*CreateCompanyResponse) ProtoMessage() {}
 
 func (x *CreateCompanyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[2]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -175,7 +300,7 @@ func (x *CreateCompanyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateCompanyResponse.ProtoReflect.Descriptor instead.
 func (*CreateCompanyResponse) Descriptor() ([]byte, []int) {
-	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{2}
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CreateCompanyResponse) GetCompany() *Company {
@@ -193,7 +318,7 @@ type ListCompaniesRequest struct {
 
 func (x *ListCompaniesRequest) Reset() {
 	*x = ListCompaniesRequest{}
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[3]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -205,7 +330,7 @@ func (x *ListCompaniesRequest) String() string {
 func (*ListCompaniesRequest) ProtoMessage() {}
 
 func (x *ListCompaniesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[3]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -218,7 +343,7 @@ func (x *ListCompaniesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCompaniesRequest.ProtoReflect.Descriptor instead.
 func (*ListCompaniesRequest) Descriptor() ([]byte, []int) {
-	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{3}
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{4}
 }
 
 type ListCompaniesResponse struct {
@@ -230,7 +355,7 @@ type ListCompaniesResponse struct {
 
 func (x *ListCompaniesResponse) Reset() {
 	*x = ListCompaniesResponse{}
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[4]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -242,7 +367,7 @@ func (x *ListCompaniesResponse) String() string {
 func (*ListCompaniesResponse) ProtoMessage() {}
 
 func (x *ListCompaniesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[4]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -255,12 +380,116 @@ func (x *ListCompaniesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCompaniesResponse.ProtoReflect.Descriptor instead.
 func (*ListCompaniesResponse) Descriptor() ([]byte, []int) {
-	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{4}
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListCompaniesResponse) GetCompanies() []*Company {
 	if x != nil {
 		return x.Companies
+	}
+	return nil
+}
+
+type UpdateCompanyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Address       *Address               `protobuf:"bytes,3,opt,name=address,proto3" json:"address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateCompanyRequest) Reset() {
+	*x = UpdateCompanyRequest{}
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateCompanyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateCompanyRequest) ProtoMessage() {}
+
+func (x *UpdateCompanyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateCompanyRequest.ProtoReflect.Descriptor instead.
+func (*UpdateCompanyRequest) Descriptor() ([]byte, []int) {
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *UpdateCompanyRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *UpdateCompanyRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateCompanyRequest) GetAddress() *Address {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+type UpdateCompanyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Company       *Company               `protobuf:"bytes,1,opt,name=company,proto3" json:"company,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateCompanyResponse) Reset() {
+	*x = UpdateCompanyResponse{}
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateCompanyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateCompanyResponse) ProtoMessage() {}
+
+func (x *UpdateCompanyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateCompanyResponse.ProtoReflect.Descriptor instead.
+func (*UpdateCompanyResponse) Descriptor() ([]byte, []int) {
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *UpdateCompanyResponse) GetCompany() *Company {
+	if x != nil {
+		return x.Company
 	}
 	return nil
 }
@@ -274,7 +503,7 @@ type ArchiveCompanyRequest struct {
 
 func (x *ArchiveCompanyRequest) Reset() {
 	*x = ArchiveCompanyRequest{}
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[5]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -286,7 +515,7 @@ func (x *ArchiveCompanyRequest) String() string {
 func (*ArchiveCompanyRequest) ProtoMessage() {}
 
 func (x *ArchiveCompanyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[5]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -299,7 +528,7 @@ func (x *ArchiveCompanyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveCompanyRequest.ProtoReflect.Descriptor instead.
 func (*ArchiveCompanyRequest) Descriptor() ([]byte, []int) {
-	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{5}
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ArchiveCompanyRequest) GetId() string {
@@ -317,7 +546,7 @@ type ArchiveCompanyResponse struct {
 
 func (x *ArchiveCompanyResponse) Reset() {
 	*x = ArchiveCompanyResponse{}
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[6]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -329,7 +558,7 @@ func (x *ArchiveCompanyResponse) String() string {
 func (*ArchiveCompanyResponse) ProtoMessage() {}
 
 func (x *ArchiveCompanyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gospa_companies_v1_companies_proto_msgTypes[6]
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -342,14 +571,199 @@ func (x *ArchiveCompanyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchiveCompanyResponse.ProtoReflect.Descriptor instead.
 func (*ArchiveCompanyResponse) Descriptor() ([]byte, []int) {
-	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{6}
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{9}
+}
+
+type GetWorkspaceCompanyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWorkspaceCompanyRequest) Reset() {
+	*x = GetWorkspaceCompanyRequest{}
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWorkspaceCompanyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWorkspaceCompanyRequest) ProtoMessage() {}
+
+func (x *GetWorkspaceCompanyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWorkspaceCompanyRequest.ProtoReflect.Descriptor instead.
+func (*GetWorkspaceCompanyRequest) Descriptor() ([]byte, []int) {
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{10}
+}
+
+type GetWorkspaceCompanyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Company       *Company               `protobuf:"bytes,1,opt,name=company,proto3" json:"company,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWorkspaceCompanyResponse) Reset() {
+	*x = GetWorkspaceCompanyResponse{}
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWorkspaceCompanyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWorkspaceCompanyResponse) ProtoMessage() {}
+
+func (x *GetWorkspaceCompanyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWorkspaceCompanyResponse.ProtoReflect.Descriptor instead.
+func (*GetWorkspaceCompanyResponse) Descriptor() ([]byte, []int) {
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *GetWorkspaceCompanyResponse) GetCompany() *Company {
+	if x != nil {
+		return x.Company
+	}
+	return nil
+}
+
+type UpdateWorkspaceCompanyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Address       *Address               `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateWorkspaceCompanyRequest) Reset() {
+	*x = UpdateWorkspaceCompanyRequest{}
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateWorkspaceCompanyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateWorkspaceCompanyRequest) ProtoMessage() {}
+
+func (x *UpdateWorkspaceCompanyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateWorkspaceCompanyRequest.ProtoReflect.Descriptor instead.
+func (*UpdateWorkspaceCompanyRequest) Descriptor() ([]byte, []int) {
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *UpdateWorkspaceCompanyRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateWorkspaceCompanyRequest) GetAddress() *Address {
+	if x != nil {
+		return x.Address
+	}
+	return nil
+}
+
+type UpdateWorkspaceCompanyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Company       *Company               `protobuf:"bytes,1,opt,name=company,proto3" json:"company,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateWorkspaceCompanyResponse) Reset() {
+	*x = UpdateWorkspaceCompanyResponse{}
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateWorkspaceCompanyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateWorkspaceCompanyResponse) ProtoMessage() {}
+
+func (x *UpdateWorkspaceCompanyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_gospa_companies_v1_companies_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateWorkspaceCompanyResponse.ProtoReflect.Descriptor instead.
+func (*UpdateWorkspaceCompanyResponse) Descriptor() ([]byte, []int) {
+	return file_gospa_companies_v1_companies_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *UpdateWorkspaceCompanyResponse) GetCompany() *Company {
+	if x != nil {
+		return x.Company
+	}
+	return nil
 }
 
 var File_gospa_companies_v1_companies_proto protoreflect.FileDescriptor
 
 const file_gospa_companies_v1_companies_proto_rawDesc = "" +
 	"\n" +
-	"\"gospa/companies/v1/companies.proto\x12\x12gospa.companies.v1\"\x9f\x01\n" +
+	"\"gospa/companies/v1/companies.proto\x12\x12gospa.companies.v1\"\xb8\x01\n" +
+	"\aAddress\x12\x14\n" +
+	"\x05line1\x18\x01 \x01(\tR\x05line1\x12\x14\n" +
+	"\x05line2\x18\x02 \x01(\tR\x05line2\x12\x12\n" +
+	"\x04city\x18\x03 \x01(\tR\x04city\x12\x16\n" +
+	"\x06region\x18\x04 \x01(\tR\x06region\x12\x1f\n" +
+	"\vpostal_code\x18\x05 \x01(\tR\n" +
+	"postalCode\x12\x18\n" +
+	"\acountry\x18\x06 \x01(\tR\acountry\x12\x1a\n" +
+	"\btimezone\x18\a \x01(\tR\btimezone\"\x84\x02\n" +
 	"\aCompany\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12$\n" +
@@ -357,21 +771,41 @@ const file_gospa_companies_v1_companies_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x05 \x01(\tR\tcreatedAt\x12\x1f\n" +
 	"\varchived_at\x18\x06 \x01(\tR\n" +
-	"archivedAtJ\x04\b\x03\x10\x04R\x04slug\"6\n" +
+	"archivedAt\x125\n" +
+	"\aaddress\x18\a \x01(\v2\x1b.gospa.companies.v1.AddressR\aaddress\x12,\n" +
+	"\x12is_workspace_owner\x18\b \x01(\bR\x10isWorkspaceOwnerJ\x04\b\x03\x10\x04R\x04slug\"m\n" +
 	"\x14CreateCompanyRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04nameJ\x04\b\x02\x10\x03R\x04slug\"N\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x125\n" +
+	"\aaddress\x18\x03 \x01(\v2\x1b.gospa.companies.v1.AddressR\aaddressJ\x04\b\x02\x10\x03R\x04slug\"N\n" +
 	"\x15CreateCompanyResponse\x125\n" +
 	"\acompany\x18\x01 \x01(\v2\x1b.gospa.companies.v1.CompanyR\acompany\"\x16\n" +
 	"\x14ListCompaniesRequest\"R\n" +
 	"\x15ListCompaniesResponse\x129\n" +
-	"\tcompanies\x18\x01 \x03(\v2\x1b.gospa.companies.v1.CompanyR\tcompanies\"'\n" +
+	"\tcompanies\x18\x01 \x03(\v2\x1b.gospa.companies.v1.CompanyR\tcompanies\"q\n" +
+	"\x14UpdateCompanyRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x125\n" +
+	"\aaddress\x18\x03 \x01(\v2\x1b.gospa.companies.v1.AddressR\aaddress\"N\n" +
+	"\x15UpdateCompanyResponse\x125\n" +
+	"\acompany\x18\x01 \x01(\v2\x1b.gospa.companies.v1.CompanyR\acompany\"'\n" +
 	"\x15ArchiveCompanyRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x18\n" +
-	"\x16ArchiveCompanyResponse2\xc7\x02\n" +
+	"\x16ArchiveCompanyResponse\"\x1c\n" +
+	"\x1aGetWorkspaceCompanyRequest\"T\n" +
+	"\x1bGetWorkspaceCompanyResponse\x125\n" +
+	"\acompany\x18\x01 \x01(\v2\x1b.gospa.companies.v1.CompanyR\acompany\"j\n" +
+	"\x1dUpdateWorkspaceCompanyRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x125\n" +
+	"\aaddress\x18\x02 \x01(\v2\x1b.gospa.companies.v1.AddressR\aaddress\"W\n" +
+	"\x1eUpdateWorkspaceCompanyResponse\x125\n" +
+	"\acompany\x18\x01 \x01(\v2\x1b.gospa.companies.v1.CompanyR\acompany2\xa6\x05\n" +
 	"\x10CompaniesService\x12d\n" +
 	"\rCreateCompany\x12(.gospa.companies.v1.CreateCompanyRequest\x1a).gospa.companies.v1.CreateCompanyResponse\x12d\n" +
-	"\rListCompanies\x12(.gospa.companies.v1.ListCompaniesRequest\x1a).gospa.companies.v1.ListCompaniesResponse\x12g\n" +
-	"\x0eArchiveCompany\x12).gospa.companies.v1.ArchiveCompanyRequest\x1a*.gospa.companies.v1.ArchiveCompanyResponseB\xd2\x01\n" +
+	"\rListCompanies\x12(.gospa.companies.v1.ListCompaniesRequest\x1a).gospa.companies.v1.ListCompaniesResponse\x12d\n" +
+	"\rUpdateCompany\x12(.gospa.companies.v1.UpdateCompanyRequest\x1a).gospa.companies.v1.UpdateCompanyResponse\x12g\n" +
+	"\x0eArchiveCompany\x12).gospa.companies.v1.ArchiveCompanyRequest\x1a*.gospa.companies.v1.ArchiveCompanyResponse\x12v\n" +
+	"\x13GetWorkspaceCompany\x12..gospa.companies.v1.GetWorkspaceCompanyRequest\x1a/.gospa.companies.v1.GetWorkspaceCompanyResponse\x12\x7f\n" +
+	"\x16UpdateWorkspaceCompany\x121.gospa.companies.v1.UpdateWorkspaceCompanyRequest\x1a2.gospa.companies.v1.UpdateWorkspaceCompanyResponseB\xd2\x01\n" +
 	"\x16com.gospa.companies.v1B\x0eCompaniesProtoP\x01Z>github.com/Gabrielbdd/gospa/gen/gospa/companies/v1;companiesv1\xa2\x02\x03GCX\xaa\x02\x12Gospa.Companies.V1\xca\x02\x12Gospa\\Companies\\V1\xe2\x02\x1eGospa\\Companies\\V1\\GPBMetadata\xea\x02\x14Gospa::Companies::V1b\x06proto3"
 
 var (
@@ -386,30 +820,50 @@ func file_gospa_companies_v1_companies_proto_rawDescGZIP() []byte {
 	return file_gospa_companies_v1_companies_proto_rawDescData
 }
 
-var file_gospa_companies_v1_companies_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_gospa_companies_v1_companies_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_gospa_companies_v1_companies_proto_goTypes = []any{
-	(*Company)(nil),                // 0: gospa.companies.v1.Company
-	(*CreateCompanyRequest)(nil),   // 1: gospa.companies.v1.CreateCompanyRequest
-	(*CreateCompanyResponse)(nil),  // 2: gospa.companies.v1.CreateCompanyResponse
-	(*ListCompaniesRequest)(nil),   // 3: gospa.companies.v1.ListCompaniesRequest
-	(*ListCompaniesResponse)(nil),  // 4: gospa.companies.v1.ListCompaniesResponse
-	(*ArchiveCompanyRequest)(nil),  // 5: gospa.companies.v1.ArchiveCompanyRequest
-	(*ArchiveCompanyResponse)(nil), // 6: gospa.companies.v1.ArchiveCompanyResponse
+	(*Address)(nil),                        // 0: gospa.companies.v1.Address
+	(*Company)(nil),                        // 1: gospa.companies.v1.Company
+	(*CreateCompanyRequest)(nil),           // 2: gospa.companies.v1.CreateCompanyRequest
+	(*CreateCompanyResponse)(nil),          // 3: gospa.companies.v1.CreateCompanyResponse
+	(*ListCompaniesRequest)(nil),           // 4: gospa.companies.v1.ListCompaniesRequest
+	(*ListCompaniesResponse)(nil),          // 5: gospa.companies.v1.ListCompaniesResponse
+	(*UpdateCompanyRequest)(nil),           // 6: gospa.companies.v1.UpdateCompanyRequest
+	(*UpdateCompanyResponse)(nil),          // 7: gospa.companies.v1.UpdateCompanyResponse
+	(*ArchiveCompanyRequest)(nil),          // 8: gospa.companies.v1.ArchiveCompanyRequest
+	(*ArchiveCompanyResponse)(nil),         // 9: gospa.companies.v1.ArchiveCompanyResponse
+	(*GetWorkspaceCompanyRequest)(nil),     // 10: gospa.companies.v1.GetWorkspaceCompanyRequest
+	(*GetWorkspaceCompanyResponse)(nil),    // 11: gospa.companies.v1.GetWorkspaceCompanyResponse
+	(*UpdateWorkspaceCompanyRequest)(nil),  // 12: gospa.companies.v1.UpdateWorkspaceCompanyRequest
+	(*UpdateWorkspaceCompanyResponse)(nil), // 13: gospa.companies.v1.UpdateWorkspaceCompanyResponse
 }
 var file_gospa_companies_v1_companies_proto_depIdxs = []int32{
-	0, // 0: gospa.companies.v1.CreateCompanyResponse.company:type_name -> gospa.companies.v1.Company
-	0, // 1: gospa.companies.v1.ListCompaniesResponse.companies:type_name -> gospa.companies.v1.Company
-	1, // 2: gospa.companies.v1.CompaniesService.CreateCompany:input_type -> gospa.companies.v1.CreateCompanyRequest
-	3, // 3: gospa.companies.v1.CompaniesService.ListCompanies:input_type -> gospa.companies.v1.ListCompaniesRequest
-	5, // 4: gospa.companies.v1.CompaniesService.ArchiveCompany:input_type -> gospa.companies.v1.ArchiveCompanyRequest
-	2, // 5: gospa.companies.v1.CompaniesService.CreateCompany:output_type -> gospa.companies.v1.CreateCompanyResponse
-	4, // 6: gospa.companies.v1.CompaniesService.ListCompanies:output_type -> gospa.companies.v1.ListCompaniesResponse
-	6, // 7: gospa.companies.v1.CompaniesService.ArchiveCompany:output_type -> gospa.companies.v1.ArchiveCompanyResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	0,  // 0: gospa.companies.v1.Company.address:type_name -> gospa.companies.v1.Address
+	0,  // 1: gospa.companies.v1.CreateCompanyRequest.address:type_name -> gospa.companies.v1.Address
+	1,  // 2: gospa.companies.v1.CreateCompanyResponse.company:type_name -> gospa.companies.v1.Company
+	1,  // 3: gospa.companies.v1.ListCompaniesResponse.companies:type_name -> gospa.companies.v1.Company
+	0,  // 4: gospa.companies.v1.UpdateCompanyRequest.address:type_name -> gospa.companies.v1.Address
+	1,  // 5: gospa.companies.v1.UpdateCompanyResponse.company:type_name -> gospa.companies.v1.Company
+	1,  // 6: gospa.companies.v1.GetWorkspaceCompanyResponse.company:type_name -> gospa.companies.v1.Company
+	0,  // 7: gospa.companies.v1.UpdateWorkspaceCompanyRequest.address:type_name -> gospa.companies.v1.Address
+	1,  // 8: gospa.companies.v1.UpdateWorkspaceCompanyResponse.company:type_name -> gospa.companies.v1.Company
+	2,  // 9: gospa.companies.v1.CompaniesService.CreateCompany:input_type -> gospa.companies.v1.CreateCompanyRequest
+	4,  // 10: gospa.companies.v1.CompaniesService.ListCompanies:input_type -> gospa.companies.v1.ListCompaniesRequest
+	6,  // 11: gospa.companies.v1.CompaniesService.UpdateCompany:input_type -> gospa.companies.v1.UpdateCompanyRequest
+	8,  // 12: gospa.companies.v1.CompaniesService.ArchiveCompany:input_type -> gospa.companies.v1.ArchiveCompanyRequest
+	10, // 13: gospa.companies.v1.CompaniesService.GetWorkspaceCompany:input_type -> gospa.companies.v1.GetWorkspaceCompanyRequest
+	12, // 14: gospa.companies.v1.CompaniesService.UpdateWorkspaceCompany:input_type -> gospa.companies.v1.UpdateWorkspaceCompanyRequest
+	3,  // 15: gospa.companies.v1.CompaniesService.CreateCompany:output_type -> gospa.companies.v1.CreateCompanyResponse
+	5,  // 16: gospa.companies.v1.CompaniesService.ListCompanies:output_type -> gospa.companies.v1.ListCompaniesResponse
+	7,  // 17: gospa.companies.v1.CompaniesService.UpdateCompany:output_type -> gospa.companies.v1.UpdateCompanyResponse
+	9,  // 18: gospa.companies.v1.CompaniesService.ArchiveCompany:output_type -> gospa.companies.v1.ArchiveCompanyResponse
+	11, // 19: gospa.companies.v1.CompaniesService.GetWorkspaceCompany:output_type -> gospa.companies.v1.GetWorkspaceCompanyResponse
+	13, // 20: gospa.companies.v1.CompaniesService.UpdateWorkspaceCompany:output_type -> gospa.companies.v1.UpdateWorkspaceCompanyResponse
+	15, // [15:21] is the sub-list for method output_type
+	9,  // [9:15] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_gospa_companies_v1_companies_proto_init() }
@@ -423,7 +877,7 @@ func file_gospa_companies_v1_companies_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gospa_companies_v1_companies_proto_rawDesc), len(file_gospa_companies_v1_companies_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

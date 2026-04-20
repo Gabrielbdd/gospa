@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const archiveContact = `-- name: ArchiveContact :exec
+UPDATE contacts
+SET archived_at = now()
+WHERE id = $1
+  AND archived_at IS NULL
+`
+
+func (q *Queries) ArchiveContact(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, archiveContact, id)
+	return err
+}
+
 const contactExistsByCompanyEmail = `-- name: ContactExistsByCompanyEmail :one
 SELECT EXISTS(
     SELECT 1 FROM contacts
@@ -33,6 +45,22 @@ type ContactExistsByCompanyEmailParams struct {
 // DB-level guarantee.
 func (q *Queries) ContactExistsByCompanyEmail(ctx context.Context, arg ContactExistsByCompanyEmailParams) (bool, error) {
 	row := q.db.QueryRow(ctx, contactExistsByCompanyEmail, arg.CompanyID, arg.Lower)
+	var found bool
+	err := row.Scan(&found)
+	return found, err
+}
+
+const contactHasWorkspaceGrant = `-- name: ContactHasWorkspaceGrant :one
+SELECT EXISTS(
+    SELECT 1 FROM workspace_grants
+    WHERE contact_id = $1
+) AS found
+`
+
+// Used by ArchiveContact to refuse archiving a contact that backs a
+// team member — the team-suspend flow is the right removal path.
+func (q *Queries) ContactHasWorkspaceGrant(ctx context.Context, contactID pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, contactHasWorkspaceGrant, contactID)
 	var found bool
 	err := row.Scan(&found)
 	return found, err
@@ -116,6 +144,107 @@ WHERE id = $1 AND archived_at IS NULL
 // ContactsService single-record operations).
 func (q *Queries) GetContact(ctx context.Context, id pgtype.UUID) (Contact, error) {
 	row := q.db.QueryRow(ctx, getContact, id)
+	var i Contact
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.FullName,
+		&i.JobTitle,
+		&i.Email,
+		&i.Phone,
+		&i.Mobile,
+		&i.Notes,
+		&i.ZitadelUserID,
+		&i.IdentitySource,
+		&i.ExternalID,
+		&i.CreatedAt,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const listContactsByCompany = `-- name: ListContactsByCompany :many
+SELECT id, company_id, full_name, job_title, email, phone, mobile, notes, zitadel_user_id, identity_source, external_id, created_at, archived_at
+FROM contacts
+WHERE company_id = $1
+  AND archived_at IS NULL
+ORDER BY lower(full_name) ASC
+`
+
+// Returns every active contact at the given company, ordered by name
+// so the UI's default sort is stable. Excludes archived rows.
+func (q *Queries) ListContactsByCompany(ctx context.Context, companyID pgtype.UUID) ([]Contact, error) {
+	rows, err := q.db.Query(ctx, listContactsByCompany, companyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Contact
+	for rows.Next() {
+		var i Contact
+		if err := rows.Scan(
+			&i.ID,
+			&i.CompanyID,
+			&i.FullName,
+			&i.JobTitle,
+			&i.Email,
+			&i.Phone,
+			&i.Mobile,
+			&i.Notes,
+			&i.ZitadelUserID,
+			&i.IdentitySource,
+			&i.ExternalID,
+			&i.CreatedAt,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateContact = `-- name: UpdateContact :one
+UPDATE contacts
+SET
+    full_name = $2,
+    job_title = $3,
+    email     = $4,
+    phone     = $5,
+    mobile    = $6,
+    notes     = $7
+WHERE id = $1
+  AND archived_at IS NULL
+RETURNING id, company_id, full_name, job_title, email, phone, mobile, notes, zitadel_user_id, identity_source, external_id, created_at, archived_at
+`
+
+type UpdateContactParams struct {
+	ID       pgtype.UUID `json:"id"`
+	FullName string      `json:"full_name"`
+	JobTitle pgtype.Text `json:"job_title"`
+	Email    pgtype.Text `json:"email"`
+	Phone    pgtype.Text `json:"phone"`
+	Mobile   pgtype.Text `json:"mobile"`
+	Notes    pgtype.Text `json:"notes"`
+}
+
+// Updates the mutable fields of a contact. Columns the app never
+// exposes (company_id, zitadel_user_id, identity_source, external_id)
+// are intentionally absent — moving a contact between companies or
+// changing its identity source are separate operations.
+func (q *Queries) UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error) {
+	row := q.db.QueryRow(ctx, updateContact,
+		arg.ID,
+		arg.FullName,
+		arg.JobTitle,
+		arg.Email,
+		arg.Phone,
+		arg.Mobile,
+		arg.Notes,
+	)
 	var i Contact
 	err := row.Scan(
 		&i.ID,

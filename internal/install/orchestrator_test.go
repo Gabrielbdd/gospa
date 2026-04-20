@@ -183,6 +183,9 @@ func (z *fakeZitadel) AddHumanUser(ctx context.Context, _ string, _ zitadel.AddH
 func (z *fakeZitadel) RemoveUser(ctx context.Context, _, _ string) error {
 	return nil
 }
+func (z *fakeZitadel) RenameOrg(ctx context.Context, _, _ string) error {
+	return nil
+}
 
 func newLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))

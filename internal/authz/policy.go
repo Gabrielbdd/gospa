@@ -9,6 +9,7 @@ package authz
 
 import (
 	companiesv1connect "github.com/Gabrielbdd/gospa/gen/gospa/companies/v1/companiesv1connect"
+	contactsv1connect "github.com/Gabrielbdd/gospa/gen/gospa/contacts/v1/contactsv1connect"
 	teamv1connect "github.com/Gabrielbdd/gospa/gen/gospa/team/v1/teamv1connect"
 )
 
@@ -47,9 +48,12 @@ func (l Level) String() string {
 // Slices that add new RPCs MUST add their entries here in the same
 // commit; the test suite would otherwise green-light a regression.
 var policy = map[string]Level{
-	companiesv1connect.CompaniesServiceListCompaniesProcedure:  LevelAuthenticated,
-	companiesv1connect.CompaniesServiceCreateCompanyProcedure:  LevelAuthenticated,
-	companiesv1connect.CompaniesServiceArchiveCompanyProcedure: LevelAdminOnly,
+	companiesv1connect.CompaniesServiceListCompaniesProcedure:          LevelAuthenticated,
+	companiesv1connect.CompaniesServiceCreateCompanyProcedure:          LevelAuthenticated,
+	companiesv1connect.CompaniesServiceUpdateCompanyProcedure:          LevelAuthenticated,
+	companiesv1connect.CompaniesServiceArchiveCompanyProcedure:         LevelAdminOnly,
+	companiesv1connect.CompaniesServiceGetWorkspaceCompanyProcedure:    LevelAuthenticated,
+	companiesv1connect.CompaniesServiceUpdateWorkspaceCompanyProcedure: LevelAdminOnly,
 
 	// Team: read is open to every team member (so technicians can
 	// see teammates). Mutations are admin-only.
@@ -58,6 +62,15 @@ var policy = map[string]Level{
 	teamv1connect.TeamServiceChangeRoleProcedure:        LevelAdminOnly,
 	teamv1connect.TeamServiceSuspendMemberProcedure:     LevelAdminOnly,
 	teamv1connect.TeamServiceReactivateMemberProcedure:  LevelAdminOnly,
+
+	// Contacts: technicians can manage contacts of customer
+	// companies (creating, editing, archiving is part of normal
+	// operator work).
+	contactsv1connect.ContactsServiceListContactsProcedure:    LevelAuthenticated,
+	contactsv1connect.ContactsServiceGetContactProcedure:      LevelAuthenticated,
+	contactsv1connect.ContactsServiceCreateContactProcedure:   LevelAuthenticated,
+	contactsv1connect.ContactsServiceUpdateContactProcedure:   LevelAuthenticated,
+	contactsv1connect.ContactsServiceArchiveContactProcedure:  LevelAuthenticated,
 }
 
 // LevelFor returns the level required for the given Connect procedure

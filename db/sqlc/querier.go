@@ -18,12 +18,16 @@ type Querier interface {
 	// the WHERE clause makes it a no-op for already-active rows.
 	ActivatePendingGrant(ctx context.Context, contactID pgtype.UUID) error
 	ArchiveCompany(ctx context.Context, id pgtype.UUID) error
+	ArchiveContact(ctx context.Context, id pgtype.UUID) error
 	// Used by InviteMember to fail fast on a duplicate email before
 	// creating the ZITADEL user. Matches the case-insensitive uniqueness
 	// predicate enforced by the contacts_company_email_active_unique
 	// partial index so the app-level pre-check stays consistent with the
 	// DB-level guarantee.
 	ContactExistsByCompanyEmail(ctx context.Context, arg ContactExistsByCompanyEmailParams) (bool, error)
+	// Used by ArchiveContact to refuse archiving a contact that backs a
+	// team member — the team-suspend flow is the right removal path.
+	ContactHasWorkspaceGrant(ctx context.Context, contactID pgtype.UUID) (bool, error)
 	// Used by the last-admin invariant to short-circuit demote/suspend/
 	// archive operations that would leave zero active admins. The partial
 	// index workspace_grants_active_admins from 00007 makes this a
@@ -44,7 +48,8 @@ type Querier interface {
 	// workspace org id — no new ZITADEL organisation is created.
 	// is_workspace_owner = TRUE is what the partial unique index in 00004
 	// enforces, so a buggy code path can't accidentally insert a second
-	// row of this kind.
+	// row of this kind. Address fields default to empty; the operator
+	// fills them later via UpdateWorkspaceCompany.
 	CreateWorkspaceCompany(ctx context.Context, arg CreateWorkspaceCompanyParams) (Company, error)
 	// Inserts the grant for a contact. Status defaults to 'active' for the
 	// install-time admin grant; the team invite flow will pass
@@ -66,6 +71,9 @@ type Querier interface {
 	// Excludes the MSP row so the operator-facing companies list never
 	// shows a customer-shaped record that isn't a customer.
 	ListCompanies(ctx context.Context) ([]Company, error)
+	// Returns every active contact at the given company, ordered by name
+	// so the UI's default sort is stable. Excludes archived rows.
+	ListContactsByCompany(ctx context.Context, companyID pgtype.UUID) ([]Contact, error)
 	// Returns every non-archived team member (contact + grant at the MSP
 	// company). Ordered by creation ascending so the initial install
 	// admin appears first and the list is stable across calls.
@@ -91,8 +99,22 @@ type Querier interface {
 	// last_seen_at = now() unconditionally is intentional: the throttle
 	// already absorbed the high-frequency case.
 	TouchLastSeen(ctx context.Context, contactID pgtype.UUID) error
+	// Updates a non-workspace company. The WHERE clause guards against
+	// accidentally editing the MSP row through the generic endpoint — the
+	// workspace company uses UpdateWorkspaceCompany so admin-only vs
+	// operator flows stay distinct in the app.
+	UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error)
+	// Updates the mutable fields of a contact. Columns the app never
+	// exposes (company_id, zitadel_user_id, identity_source, external_id)
+	// are intentionally absent — moving a contact between companies or
+	// changing its identity source are separate operations.
+	UpdateContact(ctx context.Context, arg UpdateContactParams) (Contact, error)
 	UpdateGrantRole(ctx context.Context, arg UpdateGrantRoleParams) error
 	UpdateGrantStatus(ctx context.Context, arg UpdateGrantStatusParams) error
+	// Updates the singleton MSP row. The WHERE clause guards symmetrically
+	// with UpdateCompany: only the is_workspace_owner = TRUE row is
+	// eligible, so a stale id cannot accidentally update a customer.
+	UpdateWorkspaceCompany(ctx context.Context, arg UpdateWorkspaceCompanyParams) (Company, error)
 }
 
 var _ Querier = (*Queries)(nil)

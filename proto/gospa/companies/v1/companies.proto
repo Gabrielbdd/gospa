@@ -6,10 +6,34 @@ package gospa.companies.v1;
 // eagerly to a ZITADEL organization; creating a company implies creating
 // its org and persisting the zitadel_org_id on the company row. If org
 // creation fails, the company row is not persisted.
+//
+// The MSP itself is also a companies row (is_workspace_owner = TRUE) but
+// it is hidden from ListCompanies and rejected by UpdateCompany /
+// ArchiveCompany — the operator edits the MSP via the dedicated
+// UpdateWorkspaceCompany / GetWorkspaceCompany RPCs so the two flows
+// stay distinct in the UI.
 service CompaniesService {
   rpc CreateCompany(CreateCompanyRequest) returns (CreateCompanyResponse);
   rpc ListCompanies(ListCompaniesRequest) returns (ListCompaniesResponse);
+  rpc UpdateCompany(UpdateCompanyRequest) returns (UpdateCompanyResponse);
   rpc ArchiveCompany(ArchiveCompanyRequest) returns (ArchiveCompanyResponse);
+  rpc GetWorkspaceCompany(GetWorkspaceCompanyRequest) returns (GetWorkspaceCompanyResponse);
+  rpc UpdateWorkspaceCompany(UpdateWorkspaceCompanyRequest) returns (UpdateWorkspaceCompanyResponse);
+}
+
+// Address groups the operator-facing address fields shared by every
+// company (customer and workspace-owner alike). Fields are optional —
+// empty strings are valid and common for MVP rows.
+message Address {
+  string line1 = 1;
+  string line2 = 2;
+  string city = 3;
+  string region = 4;
+  string postal_code = 5;
+  string country = 6;
+  // Timezone is an IANA zone id (e.g. "America/Sao_Paulo"). Defaults
+  // to "UTC" when a row is created without one.
+  string timezone = 7;
 }
 
 message Company {
@@ -22,6 +46,12 @@ message Company {
   string zitadel_org_id = 4;
   string created_at = 5; // RFC3339
   string archived_at = 6; // RFC3339, empty when active
+  Address address = 7;
+  // is_workspace_owner is always FALSE in ListCompanies responses
+  // (the MSP row is filtered out). Populated on GetWorkspaceCompany
+  // and on UpdateWorkspaceCompanyResponse so the SPA can assert the
+  // row it just fetched really is the MSP.
+  bool is_workspace_owner = 8;
 }
 
 message CreateCompanyRequest {
@@ -29,6 +59,7 @@ message CreateCompanyRequest {
   // Field 2 (slug) removed in Wave 1 of the slug removal plan.
   reserved 2;
   reserved "slug";
+  Address address = 3;
 }
 
 message CreateCompanyResponse {
@@ -41,8 +72,33 @@ message ListCompaniesResponse {
   repeated Company companies = 1;
 }
 
+message UpdateCompanyRequest {
+  string id = 1;
+  string name = 2;
+  Address address = 3;
+}
+
+message UpdateCompanyResponse {
+  Company company = 1;
+}
+
 message ArchiveCompanyRequest {
   string id = 1;
 }
 
 message ArchiveCompanyResponse {}
+
+message GetWorkspaceCompanyRequest {}
+
+message GetWorkspaceCompanyResponse {
+  Company company = 1;
+}
+
+message UpdateWorkspaceCompanyRequest {
+  string name = 1;
+  Address address = 2;
+}
+
+message UpdateWorkspaceCompanyResponse {
+  Company company = 1;
+}

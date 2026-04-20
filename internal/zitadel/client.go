@@ -41,6 +41,11 @@ type Client interface {
 	// path (mirrors the RemoveOrg pattern in S15). 404 is treated as
 	// success so retries are safe.
 	RemoveUser(ctx context.Context, orgID, userID string) error
+	// RenameOrg updates an organisation's display name. Used by
+	// UpdateWorkspaceCompany to propagate a Gospa-side workspace
+	// rename into ZITADEL so the two names stay in sync. Best-effort
+	// — the caller treats failure as a warning, not a fatal.
+	RenameOrg(ctx context.Context, orgID, name string) error
 }
 
 // AddHumanUserRequest is the narrow subset of the ZITADEL human-user
@@ -297,6 +302,50 @@ func (c *HTTPClient) AddOIDCApp(ctx context.Context, orgID, projectID string, re
 		return AddOIDCAppResponse{}, fmt.Errorf("zitadel AddOIDCApp: %w", err)
 	}
 	return AddOIDCAppResponse{AppID: out.AppID, ClientID: out.ClientID}, nil
+}
+
+// --- Management API: org rename ---------------------------------------
+
+type renameOrgWireRequest struct {
+	Name string `json:"name"`
+}
+
+// RenameOrg issues PUT /management/v1/orgs/me scoped to the given org
+// via the `x-zitadel-orgid` header. ZITADEL returns 200 with the
+// updated org payload; we discard it.
+func (c *HTTPClient) RenameOrg(ctx context.Context, orgID, name string) error {
+	if orgID == "" {
+		return fmt.Errorf("zitadel RenameOrg: empty org id")
+	}
+	if name == "" {
+		return fmt.Errorf("zitadel RenameOrg: empty name")
+	}
+	pat := c.patProvider()
+	if pat == "" {
+		return fmt.Errorf("zitadel RenameOrg: provisioner PAT not available")
+	}
+	buf, err := json.Marshal(renameOrgWireRequest{Name: name})
+	if err != nil {
+		return fmt.Errorf("zitadel RenameOrg: marshal: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/management/v1/orgs/me", bytes.NewReader(buf))
+	if err != nil {
+		return fmt.Errorf("zitadel RenameOrg: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+pat)
+	req.Header.Set("x-zitadel-orgid", orgID)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("zitadel RenameOrg: do request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("zitadel RenameOrg: %s: %s", resp.Status, string(body))
+	}
+	return nil
 }
 
 // --- Management API: human user creation + removal --------------------

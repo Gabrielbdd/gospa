@@ -25,21 +25,41 @@ func (q *Queries) ArchiveCompany(ctx context.Context, id pgtype.UUID) error {
 }
 
 const createCompany = `-- name: CreateCompany :one
-INSERT INTO companies (name, zitadel_org_id)
-VALUES ($1, $2)
+INSERT INTO companies (
+    name, zitadel_org_id,
+    address_line1, address_line2, city, region, postal_code, country, timezone
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
 `
 
 type CreateCompanyParams struct {
 	Name         string `json:"name"`
 	ZitadelOrgID string `json:"zitadel_org_id"`
+	AddressLine1 string `json:"address_line1"`
+	AddressLine2 string `json:"address_line2"`
+	City         string `json:"city"`
+	Region       string `json:"region"`
+	PostalCode   string `json:"postal_code"`
+	Country      string `json:"country"`
+	Timezone     string `json:"timezone"`
 }
 
 // slug column defaults to ”. Wave 2 of the slug removal plan drops
 // the column entirely; until then the handler never writes a
 // meaningful slug value.
 func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error) {
-	row := q.db.QueryRow(ctx, createCompany, arg.Name, arg.ZitadelOrgID)
+	row := q.db.QueryRow(ctx, createCompany,
+		arg.Name,
+		arg.ZitadelOrgID,
+		arg.AddressLine1,
+		arg.AddressLine2,
+		arg.City,
+		arg.Region,
+		arg.PostalCode,
+		arg.Country,
+		arg.Timezone,
+	)
 	var i Company
 	err := row.Scan(
 		&i.ID,
@@ -76,7 +96,8 @@ type CreateWorkspaceCompanyParams struct {
 // workspace org id — no new ZITADEL organisation is created.
 // is_workspace_owner = TRUE is what the partial unique index in 00004
 // enforces, so a buggy code path can't accidentally insert a second
-// row of this kind.
+// row of this kind. Address fields default to empty; the operator
+// fills them later via UpdateWorkspaceCompany.
 func (q *Queries) CreateWorkspaceCompany(ctx context.Context, arg CreateWorkspaceCompanyParams) (Company, error) {
 	row := q.db.QueryRow(ctx, createWorkspaceCompany, arg.Name, arg.ZitadelOrgID)
 	var i Company
@@ -200,4 +221,129 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateCompany = `-- name: UpdateCompany :one
+UPDATE companies
+SET
+    name          = $2,
+    address_line1 = $3,
+    address_line2 = $4,
+    city          = $5,
+    region        = $6,
+    postal_code   = $7,
+    country       = $8,
+    timezone      = $9
+WHERE id = $1
+  AND archived_at IS NULL
+  AND is_workspace_owner = FALSE
+RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
+`
+
+type UpdateCompanyParams struct {
+	ID           pgtype.UUID `json:"id"`
+	Name         string      `json:"name"`
+	AddressLine1 string      `json:"address_line1"`
+	AddressLine2 string      `json:"address_line2"`
+	City         string      `json:"city"`
+	Region       string      `json:"region"`
+	PostalCode   string      `json:"postal_code"`
+	Country      string      `json:"country"`
+	Timezone     string      `json:"timezone"`
+}
+
+// Updates a non-workspace company. The WHERE clause guards against
+// accidentally editing the MSP row through the generic endpoint — the
+// workspace company uses UpdateWorkspaceCompany so admin-only vs
+// operator flows stay distinct in the app.
+func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (Company, error) {
+	row := q.db.QueryRow(ctx, updateCompany,
+		arg.ID,
+		arg.Name,
+		arg.AddressLine1,
+		arg.AddressLine2,
+		arg.City,
+		arg.Region,
+		arg.PostalCode,
+		arg.Country,
+		arg.Timezone,
+	)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.ZitadelOrgID,
+		&i.CreatedAt,
+		&i.ArchivedAt,
+		&i.IsWorkspaceOwner,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.Region,
+		&i.PostalCode,
+		&i.Country,
+		&i.Timezone,
+	)
+	return i, err
+}
+
+const updateWorkspaceCompany = `-- name: UpdateWorkspaceCompany :one
+UPDATE companies
+SET
+    name          = $1,
+    address_line1 = $2,
+    address_line2 = $3,
+    city          = $4,
+    region        = $5,
+    postal_code   = $6,
+    country       = $7,
+    timezone      = $8
+WHERE is_workspace_owner = TRUE
+RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
+`
+
+type UpdateWorkspaceCompanyParams struct {
+	Name         string `json:"name"`
+	AddressLine1 string `json:"address_line1"`
+	AddressLine2 string `json:"address_line2"`
+	City         string `json:"city"`
+	Region       string `json:"region"`
+	PostalCode   string `json:"postal_code"`
+	Country      string `json:"country"`
+	Timezone     string `json:"timezone"`
+}
+
+// Updates the singleton MSP row. The WHERE clause guards symmetrically
+// with UpdateCompany: only the is_workspace_owner = TRUE row is
+// eligible, so a stale id cannot accidentally update a customer.
+func (q *Queries) UpdateWorkspaceCompany(ctx context.Context, arg UpdateWorkspaceCompanyParams) (Company, error) {
+	row := q.db.QueryRow(ctx, updateWorkspaceCompany,
+		arg.Name,
+		arg.AddressLine1,
+		arg.AddressLine2,
+		arg.City,
+		arg.Region,
+		arg.PostalCode,
+		arg.Country,
+		arg.Timezone,
+	)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.ZitadelOrgID,
+		&i.CreatedAt,
+		&i.ArchivedAt,
+		&i.IsWorkspaceOwner,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.Region,
+		&i.PostalCode,
+		&i.Country,
+		&i.Timezone,
+	)
+	return i, err
 }

@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+package gospa.contacts.v1;
+
+// ContactsService manages customer-company contacts: people at client
+// companies recorded for attribution, routing, and future Microsoft
+// 365 / SCIM sync. Contacts are NOT logins in V1 — zitadel_user_id and
+// identity_source columns exist in the schema but are storage-only,
+// populated by the install/team flows (for MSP staff) but never
+// written from this surface.
+//
+// Email uniqueness is per company: the same email can appear at
+// multiple customer companies (a consultant serves several clients),
+// but not twice inside the same company on non-archived rows.
+service ContactsService {
+  rpc ListContacts(ListContactsRequest) returns (ListContactsResponse);
+  rpc GetContact(GetContactRequest) returns (GetContactResponse);
+  rpc CreateContact(CreateContactRequest) returns (CreateContactResponse);
+  rpc UpdateContact(UpdateContactRequest) returns (UpdateContactResponse);
+  rpc ArchiveContact(ArchiveContactRequest) returns (ArchiveContactResponse);
+}
+
+message Contact {
+  string id = 1;
+  string company_id = 2;
+  string full_name = 3;
+  string job_title = 4;
+  string email = 5;
+  string phone = 6;
+  string mobile = 7;
+  string notes = 8;
+  string created_at = 9;   // RFC3339
+  string archived_at = 10;  // RFC3339, empty when active
+}
+
+message ListContactsRequest {
+  string company_id = 1;
+}
+
+message ListContactsResponse {
+  repeated Contact contacts = 1;
+}
+
+message GetContactRequest {
+  string id = 1;
+}
+
+message GetContactResponse {
+  Contact contact = 1;
+}
+
+message CreateContactRequest {
+  string company_id = 1;
+  string full_name = 2;
+  string job_title = 3;
+  string email = 4;
+  string phone = 5;
+  string mobile = 6;
+  string notes = 7;
+}
+
+message CreateContactResponse {
+  Contact contact = 1;
+}
+
+message UpdateContactRequest {
+  string id = 1;
+  string full_name = 2;
+  string job_title = 3;
+  string email = 4;
+  string phone = 5;
+  string mobile = 6;
+  string notes = 7;
+}
+
+message UpdateContactResponse {
+  Contact contact = 1;
+}
+
+message ArchiveContactRequest {
+  string id = 1;
+}
+
+message ArchiveContactResponse {}

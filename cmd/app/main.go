@@ -19,11 +19,13 @@ import (
 	"github.com/Gabrielbdd/gospa/db"
 	"github.com/Gabrielbdd/gospa/db/sqlc"
 	"github.com/Gabrielbdd/gospa/gen/gospa/companies/v1/companiesv1connect"
+	"github.com/Gabrielbdd/gospa/gen/gospa/contacts/v1/contactsv1connect"
 	"github.com/Gabrielbdd/gospa/gen/gospa/install/v1/installv1connect"
 	"github.com/Gabrielbdd/gospa/gen/gospa/team/v1/teamv1connect"
 	"github.com/Gabrielbdd/gospa/internal/authgate"
 	"github.com/Gabrielbdd/gospa/internal/authz"
 	"github.com/Gabrielbdd/gospa/internal/companies"
+	"github.com/Gabrielbdd/gospa/internal/contacts"
 	"github.com/Gabrielbdd/gospa/internal/install"
 	"github.com/Gabrielbdd/gospa/internal/team"
 	"github.com/Gabrielbdd/gospa/internal/installtoken"
@@ -200,6 +202,10 @@ func main() {
 		Zitadel: zitadelClient,
 		Logger:  slog.Default(),
 	}
+	contactsHandler := &contacts.Handler{
+		Queries: queries,
+		Logger:  slog.Default(),
+	}
 
 	// Pre-v1 contract: no read-repair, no backfill, no mid-install
 	// recovery. Every schema or state change assumes the operator runs
@@ -294,6 +300,11 @@ func main() {
 	// and authenticated-read on ListMembers via the policy map.
 	teamPath, teamConnectHandler := teamv1connect.NewTeamServiceHandler(teamHandler)
 	app.Handle(teamPath+"*", teamConnectHandler)
+
+	// Contacts service — technicians can manage customer-company
+	// contacts; the team-member archive guard lives in the handler.
+	contactsPath, contactsConnectHandler := contactsv1connect.NewContactsServiceHandler(contactsHandler)
+	app.Handle(contactsPath+"*", contactsConnectHandler)
 
 	app.Handle("/*", web.Handler())
 
