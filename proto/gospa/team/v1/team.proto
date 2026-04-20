@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package gospa.team.v1;
+
+// TeamService manages the workspace team — the humans who operate Gospa
+// on behalf of the MSP. Team members live as contacts of the MSP's
+// companies row (is_workspace_owner = TRUE) with a workspace_grants
+// row assigning them the admin or technician role.
+//
+// Authorisation is enforced by internal/authz/middleware (role read
+// from workspace_grants, not from the JWT). ZITADEL handles identity
+// only — there are no ZITADEL project roles or user grants issued by
+// Gospa.
+service TeamService {
+  // ListMembers returns every non-archived team member.
+  rpc ListMembers(ListMembersRequest) returns (ListMembersResponse);
+
+  // InviteMember creates a ZITADEL human user with a server-generated
+  // temporary password (passwordChangeRequired=true) and inserts the
+  // local contact + workspace_grants row in one transaction. Returns
+  // the temporary password exactly once in the response — subsequent
+  // reads do not expose it.
+  rpc InviteMember(InviteMemberRequest) returns (InviteMemberResponse);
+
+  // ChangeRole flips the role column on an existing grant. The change
+  // applies immediately to the affected member's next authenticated
+  // request; there is no JWT-TTL staleness window because role lives
+  // in Postgres.
+  rpc ChangeRole(ChangeRoleRequest) returns (ChangeRoleResponse);
+
+  // SuspendMember flips status=suspended in Postgres; the ZITADEL user
+  // stays active (see decision G in the team-contacts-unified spec).
+  // The middleware rejects every request from a suspended grant, so
+  // the member is locked out of Gospa even though their identity
+  // still works against ZITADEL directly.
+  rpc SuspendMember(SuspendMemberRequest) returns (SuspendMemberResponse);
+
+  // ReactivateMember reverses SuspendMember.
+  rpc ReactivateMember(ReactivateMemberRequest) returns (ReactivateMemberResponse);
+}
+
+// MemberRole mirrors workspace_grants.role.
+enum MemberRole {
+  MEMBER_ROLE_UNSPECIFIED = 0;
+  MEMBER_ROLE_ADMIN = 1;
+  MEMBER_ROLE_TECHNICIAN = 2;
+}
+
+// MemberStatus mirrors workspace_grants.status.
+enum MemberStatus {
+  MEMBER_STATUS_UNSPECIFIED = 0;
+  MEMBER_STATUS_ACTIVE = 1;
+  MEMBER_STATUS_NOT_SIGNED_IN_YET = 2;
+  MEMBER_STATUS_SUSPENDED = 3;
+}
+
+message TeamMember {
+  // Matches contacts.id.
+  string id = 1;
+  string full_name = 2;
+  string email = 3;
+  MemberRole role = 4;
+  MemberStatus status = 5;
+  // last_seen_at is the most recent authenticated request from this
+  // member, throttled to ~60s writes. Empty string when the member has
+  // never signed in.
+  string last_seen_at = 6; // RFC3339, empty when never signed in
+  string created_at = 7;   // RFC3339
+}
+
+message ListMembersRequest {}
+
+message ListMembersResponse {
+  repeated TeamMember members = 1;
+}
+
+message InviteMemberRequest {
+  string full_name = 1;
+  string email = 2;
+  MemberRole role = 3;
+}
+
+message InviteMemberResponse {
+  TeamMember member = 1;
+  // temporary_password is the server-generated one-time secret. Shown
+  // to the admin in the UI exactly once and never returned by any
+  // other RPC. The new member must change it on first sign-in
+  // (passwordChangeRequired=true at the ZITADEL user).
+  string temporary_password = 2;
+}
+
+message ChangeRoleRequest {
+  string contact_id = 1;
+  MemberRole role = 2;
+}
+
+message ChangeRoleResponse {
+  TeamMember member = 1;
+}
+
+message SuspendMemberRequest {
+  string contact_id = 1;
+}
+
+message SuspendMemberResponse {
+  TeamMember member = 1;
+}
+
+message ReactivateMemberRequest {
+  string contact_id = 1;
+}
+
+message ReactivateMemberResponse {
+  TeamMember member = 1;
+}

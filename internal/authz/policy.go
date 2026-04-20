@@ -9,6 +9,7 @@ package authz
 
 import (
 	companiesv1connect "github.com/Gabrielbdd/gospa/gen/gospa/companies/v1/companiesv1connect"
+	teamv1connect "github.com/Gabrielbdd/gospa/gen/gospa/team/v1/teamv1connect"
 )
 
 // Level is the access bar a Connect procedure requires.
@@ -49,6 +50,14 @@ var policy = map[string]Level{
 	companiesv1connect.CompaniesServiceListCompaniesProcedure:  LevelAuthenticated,
 	companiesv1connect.CompaniesServiceCreateCompanyProcedure:  LevelAuthenticated,
 	companiesv1connect.CompaniesServiceArchiveCompanyProcedure: LevelAdminOnly,
+
+	// Team: read is open to every team member (so technicians can
+	// see teammates). Mutations are admin-only.
+	teamv1connect.TeamServiceListMembersProcedure:       LevelAuthenticated,
+	teamv1connect.TeamServiceInviteMemberProcedure:      LevelAdminOnly,
+	teamv1connect.TeamServiceChangeRoleProcedure:        LevelAdminOnly,
+	teamv1connect.TeamServiceSuspendMemberProcedure:     LevelAdminOnly,
+	teamv1connect.TeamServiceReactivateMemberProcedure:  LevelAdminOnly,
 }
 
 // LevelFor returns the level required for the given Connect procedure

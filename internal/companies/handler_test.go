@@ -69,6 +69,12 @@ func (z *fakeZitadel) AddOIDCApp(ctx context.Context, _, _ string, _ zitadel.Add
 func (z *fakeZitadel) RemoveOrg(ctx context.Context, _ string) error {
 	return nil
 }
+func (z *fakeZitadel) AddHumanUser(ctx context.Context, _ string, _ zitadel.AddHumanUserRequest) (string, error) {
+	return "", nil
+}
+func (z *fakeZitadel) RemoveUser(ctx context.Context, _, _ string) error {
+	return nil
+}
 
 func readyWorkspace() sqlc.Workspace {
 	return sqlc.Workspace{InstallState: sqlc.WorkspaceInstallStateReady}

@@ -11,6 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const contactExistsByCompanyEmail = `-- name: ContactExistsByCompanyEmail :one
+SELECT EXISTS(
+    SELECT 1 FROM contacts
+    WHERE company_id = $1
+      AND email IS NOT NULL
+      AND lower(email) = lower($2)
+      AND archived_at IS NULL
+) AS found
+`
+
+type ContactExistsByCompanyEmailParams struct {
+	CompanyID pgtype.UUID `json:"company_id"`
+	Lower     string      `json:"lower"`
+}
+
+// Used by InviteMember to fail fast on a duplicate email before
+// creating the ZITADEL user. Matches the case-insensitive uniqueness
+// predicate enforced by the contacts_company_email_active_unique
+// partial index so the app-level pre-check stays consistent with the
+// DB-level guarantee.
+func (q *Queries) ContactExistsByCompanyEmail(ctx context.Context, arg ContactExistsByCompanyEmailParams) (bool, error) {
+	row := q.db.QueryRow(ctx, contactExistsByCompanyEmail, arg.CompanyID, arg.Lower)
+	var found bool
+	err := row.Scan(&found)
+	return found, err
+}
+
 const createContact = `-- name: CreateContact :one
 INSERT INTO contacts (
     company_id,
@@ -59,6 +86,36 @@ func (q *Queries) CreateContact(ctx context.Context, arg CreateContactParams) (C
 		arg.IdentitySource,
 		arg.ExternalID,
 	)
+	var i Contact
+	err := row.Scan(
+		&i.ID,
+		&i.CompanyID,
+		&i.FullName,
+		&i.JobTitle,
+		&i.Email,
+		&i.Phone,
+		&i.Mobile,
+		&i.Notes,
+		&i.ZitadelUserID,
+		&i.IdentitySource,
+		&i.ExternalID,
+		&i.CreatedAt,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const getContact = `-- name: GetContact :one
+SELECT id, company_id, full_name, job_title, email, phone, mobile, notes, zitadel_user_id, identity_source, external_id, created_at, archived_at
+FROM contacts
+WHERE id = $1 AND archived_at IS NULL
+`
+
+// Returns the active contact by id. Used by handlers that accept a
+// contact_id from the wire (TeamService change-role/suspend/archive,
+// ContactsService single-record operations).
+func (q *Queries) GetContact(ctx context.Context, id pgtype.UUID) (Contact, error) {
+	row := q.db.QueryRow(ctx, getContact, id)
 	var i Contact
 	err := row.Scan(
 		&i.ID,

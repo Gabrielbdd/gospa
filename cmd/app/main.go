@@ -20,10 +20,12 @@ import (
 	"github.com/Gabrielbdd/gospa/db/sqlc"
 	"github.com/Gabrielbdd/gospa/gen/gospa/companies/v1/companiesv1connect"
 	"github.com/Gabrielbdd/gospa/gen/gospa/install/v1/installv1connect"
+	"github.com/Gabrielbdd/gospa/gen/gospa/team/v1/teamv1connect"
 	"github.com/Gabrielbdd/gospa/internal/authgate"
 	"github.com/Gabrielbdd/gospa/internal/authz"
 	"github.com/Gabrielbdd/gospa/internal/companies"
 	"github.com/Gabrielbdd/gospa/internal/install"
+	"github.com/Gabrielbdd/gospa/internal/team"
 	"github.com/Gabrielbdd/gospa/internal/installtoken"
 	"github.com/Gabrielbdd/gospa/internal/patwatch"
 	"github.com/Gabrielbdd/gospa/internal/publicconfig"
@@ -193,6 +195,11 @@ func main() {
 		Zitadel: zitadelClient,
 		Logger:  slog.Default(),
 	}
+	teamHandler := &team.Handler{
+		Queries: queries,
+		Zitadel: zitadelClient,
+		Logger:  slog.Default(),
+	}
 
 	// Pre-v1 contract: no read-repair, no backfill, no mid-install
 	// recovery. Every schema or state change assumes the operator runs
@@ -282,6 +289,11 @@ func main() {
 	// pointing users at /install when the workspace is not yet set up.
 	companiesPath, companiesConnectHandler := companiesv1connect.NewCompaniesServiceHandler(companiesHandler)
 	app.Handle(companiesPath+"*", companiesConnectHandler)
+
+	// Team service — authz middleware enforces admin_only on mutations
+	// and authenticated-read on ListMembers via the policy map.
+	teamPath, teamConnectHandler := teamv1connect.NewTeamServiceHandler(teamHandler)
+	app.Handle(teamPath+"*", teamConnectHandler)
 
 	app.Handle("/*", web.Handler())
 

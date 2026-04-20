@@ -106,6 +106,64 @@ func (q *Queries) GetGrantByContactID(ctx context.Context, contactID pgtype.UUID
 	return i, err
 }
 
+const listTeamMembers = `-- name: ListTeamMembers :many
+SELECT
+    c.id           AS contact_id,
+    c.full_name    AS full_name,
+    c.email        AS email,
+    g.role         AS role,
+    g.status       AS status,
+    g.last_seen_at AS last_seen_at,
+    c.created_at   AS created_at
+FROM workspace_grants g
+INNER JOIN contacts c ON c.id = g.contact_id
+INNER JOIN companies co ON co.id = c.company_id
+WHERE co.is_workspace_owner = TRUE
+  AND c.archived_at IS NULL
+ORDER BY c.created_at ASC
+`
+
+type ListTeamMembersRow struct {
+	ContactID  pgtype.UUID        `json:"contact_id"`
+	FullName   string             `json:"full_name"`
+	Email      pgtype.Text        `json:"email"`
+	Role       WorkspaceRole      `json:"role"`
+	Status     GrantStatus        `json:"status"`
+	LastSeenAt pgtype.Timestamptz `json:"last_seen_at"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+// Returns every non-archived team member (contact + grant at the MSP
+// company). Ordered by creation ascending so the initial install
+// admin appears first and the list is stable across calls.
+func (q *Queries) ListTeamMembers(ctx context.Context) ([]ListTeamMembersRow, error) {
+	rows, err := q.db.Query(ctx, listTeamMembers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTeamMembersRow
+	for rows.Next() {
+		var i ListTeamMembersRow
+		if err := rows.Scan(
+			&i.ContactID,
+			&i.FullName,
+			&i.Email,
+			&i.Role,
+			&i.Status,
+			&i.LastSeenAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const resolveTeamCallerByZitadelUserID = `-- name: ResolveTeamCallerByZitadelUserID :one
 SELECT
     c.id            AS contact_id,

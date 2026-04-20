@@ -32,6 +32,31 @@ type Client interface {
 	// post-SetUpOrg step fails. Idempotent: a 404 from ZITADEL is
 	// treated as success so retries are safe.
 	RemoveOrg(ctx context.Context, orgID string) error
+	// AddHumanUser creates a human user inside the given organisation
+	// with a fixed password. Used by the team-invite flow to
+	// bootstrap a new member whose first sign-in must change the
+	// password. Returns the ZITADEL user id.
+	AddHumanUser(ctx context.Context, orgID string, req AddHumanUserRequest) (string, error)
+	// RemoveUser deletes a user. Used by the invite-failure cleanup
+	// path (mirrors the RemoveOrg pattern in S15). 404 is treated as
+	// success so retries are safe.
+	RemoveUser(ctx context.Context, orgID, userID string) error
+}
+
+// AddHumanUserRequest is the narrow subset of the ZITADEL human-user
+// creation API that Gospa consumes. Email is verified server-side
+// (IsEmailVerified=true) because the invite flow hands the credentials
+// off to the admin, not the invitee — the email is attested by the
+// admin, not by a click on a link.
+type AddHumanUserRequest struct {
+	Email                  string
+	FirstName              string
+	LastName               string
+	// Password is the server-generated one-time secret. ZITADEL hashes
+	// it on the server side. The invitee must change it on first
+	// sign-in (see PasswordChangeRequired).
+	Password               string
+	PasswordChangeRequired bool
 }
 
 // SetUpOrgRequest is the input for the Admin SetUpOrg call, which creates
@@ -272,6 +297,88 @@ func (c *HTTPClient) AddOIDCApp(ctx context.Context, orgID, projectID string, re
 		return AddOIDCAppResponse{}, fmt.Errorf("zitadel AddOIDCApp: %w", err)
 	}
 	return AddOIDCAppResponse{AppID: out.AppID, ClientID: out.ClientID}, nil
+}
+
+// --- Management API: human user creation + removal --------------------
+
+type addHumanUserWireRequest struct {
+	UserName string                       `json:"userName"`
+	Profile  setUpOrgProfileWire          `json:"profile"`
+	Email    setUpOrgEmailWire            `json:"email"`
+	// InitialPassword is what ZITADEL names this field in the v1
+	// Management API. The key differs from the admin/_setup flow
+	// (which uses "password") — keep the wire types distinct.
+	InitialPassword        string `json:"initialPassword,omitempty"`
+	PasswordChangeRequired bool   `json:"passwordChangeRequired,omitempty"`
+}
+
+type addHumanUserWireResponse struct {
+	UserID string `json:"userId"`
+}
+
+// AddHumanUser issues POST /management/v1/users/human/_import scoped
+// to the given organisation. The invitee logs in with the temporary
+// password and is forced to change it on first sign-in when
+// PasswordChangeRequired is true.
+func (c *HTTPClient) AddHumanUser(ctx context.Context, orgID string, req AddHumanUserRequest) (string, error) {
+	if orgID == "" {
+		return "", fmt.Errorf("zitadel AddHumanUser: empty org id")
+	}
+	wire := addHumanUserWireRequest{
+		UserName: req.Email,
+		Profile: setUpOrgProfileWire{
+			FirstName: req.FirstName,
+			LastName:  req.LastName,
+		},
+		Email: setUpOrgEmailWire{
+			Email:           req.Email,
+			IsEmailVerified: true,
+		},
+		InitialPassword:        req.Password,
+		PasswordChangeRequired: req.PasswordChangeRequired,
+	}
+	var out addHumanUserWireResponse
+	if err := c.post(ctx, "/management/v1/users/human/_import", orgID, wire, &out); err != nil {
+		return "", fmt.Errorf("zitadel AddHumanUser: %w", err)
+	}
+	return out.UserID, nil
+}
+
+// RemoveUser deletes a user by id. 404 is treated as success — if the
+// user is already gone (previous cleanup succeeded, manual delete in
+// ZITADEL console), the caller's intent is satisfied.
+func (c *HTTPClient) RemoveUser(ctx context.Context, orgID, userID string) error {
+	if orgID == "" {
+		return fmt.Errorf("zitadel RemoveUser: empty org id")
+	}
+	if userID == "" {
+		return fmt.Errorf("zitadel RemoveUser: empty user id")
+	}
+	pat := c.patProvider()
+	if pat == "" {
+		return fmt.Errorf("zitadel RemoveUser: provisioner PAT not available")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/management/v1/users/"+userID, nil)
+	if err != nil {
+		return fmt.Errorf("zitadel RemoveUser: build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+pat)
+	req.Header.Set("x-zitadel-orgid", orgID)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return fmt.Errorf("zitadel RemoveUser: do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("zitadel RemoveUser: %s: %s", resp.Status, string(body))
+	}
+	return nil
 }
 
 // --- HTTP plumbing -----------------------------------------------------

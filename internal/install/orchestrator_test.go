@@ -177,6 +177,12 @@ func (z *fakeZitadel) RemoveOrg(ctx context.Context, orgID string) error {
 	z.removeOrgCalls = append(z.removeOrgCalls, orgID)
 	return z.removeOrgErr
 }
+func (z *fakeZitadel) AddHumanUser(ctx context.Context, _ string, _ zitadel.AddHumanUserRequest) (string, error) {
+	return "", nil
+}
+func (z *fakeZitadel) RemoveUser(ctx context.Context, _, _ string) error {
+	return nil
+}
 
 func newLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))

@@ -18,6 +18,12 @@ type Querier interface {
 	// the WHERE clause makes it a no-op for already-active rows.
 	ActivatePendingGrant(ctx context.Context, contactID pgtype.UUID) error
 	ArchiveCompany(ctx context.Context, id pgtype.UUID) error
+	// Used by InviteMember to fail fast on a duplicate email before
+	// creating the ZITADEL user. Matches the case-insensitive uniqueness
+	// predicate enforced by the contacts_company_email_active_unique
+	// partial index so the app-level pre-check stays consistent with the
+	// DB-level guarantee.
+	ContactExistsByCompanyEmail(ctx context.Context, arg ContactExistsByCompanyEmailParams) (bool, error)
 	// Used by the last-admin invariant to short-circuit demote/suspend/
 	// archive operations that would leave zero active admins. The partial
 	// index workspace_grants_active_admins from 00007 makes this a
@@ -45,6 +51,10 @@ type Querier interface {
 	// 'not_signed_in_yet' for new members.
 	CreateWorkspaceGrant(ctx context.Context, arg CreateWorkspaceGrantParams) (WorkspaceGrant, error)
 	GetCompany(ctx context.Context, id pgtype.UUID) (Company, error)
+	// Returns the active contact by id. Used by handlers that accept a
+	// contact_id from the wire (TeamService change-role/suspend/archive,
+	// ContactsService single-record operations).
+	GetContact(ctx context.Context, id pgtype.UUID) (Contact, error)
 	GetGrantByContactID(ctx context.Context, contactID pgtype.UUID) (WorkspaceGrant, error)
 	// Column order intentionally matches the workspace table's column order
 	// (base columns from 00001, the auth-contract columns added in 00003)
@@ -56,6 +66,10 @@ type Querier interface {
 	// Excludes the MSP row so the operator-facing companies list never
 	// shows a customer-shaped record that isn't a customer.
 	ListCompanies(ctx context.Context) ([]Company, error)
+	// Returns every non-archived team member (contact + grant at the MSP
+	// company). Ordered by creation ascending so the initial install
+	// admin appears first and the list is stable across calls.
+	ListTeamMembers(ctx context.Context) ([]ListTeamMembersRow, error)
 	MarkWorkspaceFailed(ctx context.Context, installError pgtype.Text) error
 	// slug column is no longer written by the install flow (Wave 1 of
 	// slug removal). Wave 2 drops the column entirely.
