@@ -1,12 +1,9 @@
 -- name: CreateCompany :one
--- slug column defaults to ''. Wave 2 of the slug removal plan drops
--- the column entirely; until then the handler never writes a
--- meaningful slug value.
 INSERT INTO companies (
-    name, zitadel_org_id,
+    name, zitadel_org_id, owner_contact_id,
     address_line1, address_line2, city, region, postal_code, country, timezone
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: CreateWorkspaceCompany :one
@@ -28,14 +25,15 @@ RETURNING *;
 -- operator flows stay distinct in the app.
 UPDATE companies
 SET
-    name          = $2,
-    address_line1 = $3,
-    address_line2 = $4,
-    city          = $5,
-    region        = $6,
-    postal_code   = $7,
-    country       = $8,
-    timezone      = $9
+    name             = $2,
+    owner_contact_id = $3,
+    address_line1    = $4,
+    address_line2    = $5,
+    city             = $6,
+    region           = $7,
+    postal_code      = $8,
+    country          = $9,
+    timezone         = $10
 WHERE id = $1
   AND archived_at IS NULL
   AND is_workspace_owner = FALSE
@@ -59,9 +57,26 @@ WHERE is_workspace_owner = TRUE
 RETURNING *;
 
 -- name: GetCompany :one
-SELECT *
-FROM companies
-WHERE id = $1 AND archived_at IS NULL;
+-- Non-archived lookup used by UpdateCompany / UI Detail. LEFT JOIN
+-- contacts so the owner's full_name comes back denormalised — saves
+-- the SPA a second round-trip.
+SELECT
+    c.*,
+    o.full_name AS owner_full_name
+FROM companies c
+LEFT JOIN contacts o ON o.id = c.owner_contact_id
+WHERE c.id = $1 AND c.archived_at IS NULL;
+
+-- name: GetCompanyIncludingArchived :one
+-- Same as GetCompany but includes archived rows. Used by the Detail
+-- page so the operator can still see (and Restore) an archived
+-- company via a direct link.
+SELECT
+    c.*,
+    o.full_name AS owner_full_name
+FROM companies c
+LEFT JOIN contacts o ON o.id = c.owner_contact_id
+WHERE c.id = $1;
 
 -- name: GetWorkspaceCompany :one
 -- Returns the singleton MSP row. Used by /settings/workspace (Slice 5).
@@ -72,12 +87,15 @@ LIMIT 1;
 
 -- name: ListCompanies :many
 -- Excludes the MSP row so the operator-facing companies list never
--- shows a customer-shaped record that isn't a customer.
-SELECT *
-FROM companies
-WHERE archived_at IS NULL
-  AND is_workspace_owner = FALSE
-ORDER BY created_at DESC;
+-- shows a customer-shaped record that isn't a customer. The owner's
+-- full_name comes back denormalised via LEFT JOIN.
+SELECT
+    c.*,
+    o.full_name AS owner_full_name
+FROM companies c
+LEFT JOIN contacts o ON o.id = c.owner_contact_id
+WHERE c.is_workspace_owner = FALSE
+ORDER BY c.created_at DESC;
 
 -- name: ArchiveCompany :exec
 UPDATE companies
@@ -85,3 +103,14 @@ SET archived_at = now()
 WHERE id = $1
   AND archived_at IS NULL
   AND is_workspace_owner = FALSE;
+
+-- name: RestoreCompany :one
+-- Reverses ArchiveCompany. Rejects the MSP row symmetrically with
+-- ArchiveCompany — the workspace row is never archived, so restoring
+-- it must be a bug.
+UPDATE companies
+SET archived_at = NULL
+WHERE id = $1
+  AND archived_at IS NOT NULL
+  AND is_workspace_owner = FALSE
+RETURNING *;

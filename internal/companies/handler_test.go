@@ -26,11 +26,14 @@ type fakeQueries struct {
 	createRow    sqlc.Company
 	createErr    error
 
-	listRows []sqlc.Company
+	listRows []sqlc.ListCompaniesRow
 	listErr  error
 
-	getCompanyRow sqlc.Company
+	getCompanyRow sqlc.GetCompanyRow
 	getCompanyErr error
+
+	getIncludingRow sqlc.GetCompanyIncludingArchivedRow
+	getIncludingErr error
 
 	updateParams sqlc.UpdateCompanyParams
 	updateRow    sqlc.Company
@@ -39,6 +42,9 @@ type fakeQueries struct {
 	updateWorkspaceParams sqlc.UpdateWorkspaceCompanyParams
 	updateWorkspaceRow    sqlc.Company
 	updateWorkspaceErr    error
+
+	restoreRow sqlc.Company
+	restoreErr error
 
 	workspaceCompany sqlc.Company
 }
@@ -51,14 +57,53 @@ func (f *fakeQueries) CreateCompany(ctx context.Context, arg sqlc.CreateCompanyP
 	f.createParams = arg
 	return f.createRow, f.createErr
 }
-func (f *fakeQueries) ListCompanies(ctx context.Context) ([]sqlc.Company, error) {
+func (f *fakeQueries) ListCompanies(ctx context.Context) ([]sqlc.ListCompaniesRow, error) {
 	return f.listRows, f.listErr
 }
-func (f *fakeQueries) GetCompany(ctx context.Context, _ pgtype.UUID) (sqlc.Company, error) {
+func (f *fakeQueries) GetCompany(ctx context.Context, _ pgtype.UUID) (sqlc.GetCompanyRow, error) {
 	return f.getCompanyRow, f.getCompanyErr
+}
+func (f *fakeQueries) GetCompanyIncludingArchived(ctx context.Context, _ pgtype.UUID) (sqlc.GetCompanyIncludingArchivedRow, error) {
+	if f.getIncludingErr != nil {
+		return sqlc.GetCompanyIncludingArchivedRow{}, f.getIncludingErr
+	}
+	if f.getIncludingRow.ID.Valid {
+		return f.getIncludingRow, nil
+	}
+	// Fall back to whichever mutation row is populated so tests that
+	// only set createRow/updateRow/restoreRow still see a coherent
+	// hydrated re-fetch without boilerplate.
+	for _, c := range []sqlc.Company{f.restoreRow, f.updateRow, f.createRow} {
+		if c.ID.Valid {
+			return companyToGetIncludingRow(c), nil
+		}
+	}
+	return sqlc.GetCompanyIncludingArchivedRow{}, nil
+}
+
+func companyToGetIncludingRow(c sqlc.Company) sqlc.GetCompanyIncludingArchivedRow {
+	return sqlc.GetCompanyIncludingArchivedRow{
+		ID:               c.ID,
+		Name:             c.Name,
+		ZitadelOrgID:     c.ZitadelOrgID,
+		CreatedAt:        c.CreatedAt,
+		ArchivedAt:       c.ArchivedAt,
+		IsWorkspaceOwner: c.IsWorkspaceOwner,
+		AddressLine1:     c.AddressLine1,
+		AddressLine2:     c.AddressLine2,
+		City:             c.City,
+		Region:           c.Region,
+		PostalCode:       c.PostalCode,
+		Country:          c.Country,
+		Timezone:         c.Timezone,
+		OwnerContactID:   c.OwnerContactID,
+	}
 }
 func (f *fakeQueries) ArchiveCompany(ctx context.Context, _ pgtype.UUID) error {
 	return nil
+}
+func (f *fakeQueries) RestoreCompany(ctx context.Context, _ pgtype.UUID) (sqlc.Company, error) {
+	return f.restoreRow, f.restoreErr
 }
 func (f *fakeQueries) UpdateCompany(ctx context.Context, arg sqlc.UpdateCompanyParams) (sqlc.Company, error) {
 	f.updateParams = arg

@@ -49,9 +49,11 @@ func (l Level) String() string {
 // commit; the test suite would otherwise green-light a regression.
 var policy = map[string]Level{
 	companiesv1connect.CompaniesServiceListCompaniesProcedure:          LevelAuthenticated,
+	companiesv1connect.CompaniesServiceGetCompanyProcedure:             LevelAuthenticated,
 	companiesv1connect.CompaniesServiceCreateCompanyProcedure:          LevelAuthenticated,
 	companiesv1connect.CompaniesServiceUpdateCompanyProcedure:          LevelAuthenticated,
 	companiesv1connect.CompaniesServiceArchiveCompanyProcedure:         LevelAdminOnly,
+	companiesv1connect.CompaniesServiceRestoreCompanyProcedure:         LevelAdminOnly,
 	companiesv1connect.CompaniesServiceGetWorkspaceCompanyProcedure:    LevelAuthenticated,
 	companiesv1connect.CompaniesServiceUpdateWorkspaceCompanyProcedure: LevelAdminOnly,
 

@@ -26,32 +26,31 @@ func (q *Queries) ArchiveCompany(ctx context.Context, id pgtype.UUID) error {
 
 const createCompany = `-- name: CreateCompany :one
 INSERT INTO companies (
-    name, zitadel_org_id,
+    name, zitadel_org_id, owner_contact_id,
     address_line1, address_line2, city, region, postal_code, country, timezone
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+RETURNING id, name, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone, owner_contact_id
 `
 
 type CreateCompanyParams struct {
-	Name         string `json:"name"`
-	ZitadelOrgID string `json:"zitadel_org_id"`
-	AddressLine1 string `json:"address_line1"`
-	AddressLine2 string `json:"address_line2"`
-	City         string `json:"city"`
-	Region       string `json:"region"`
-	PostalCode   string `json:"postal_code"`
-	Country      string `json:"country"`
-	Timezone     string `json:"timezone"`
+	Name           string      `json:"name"`
+	ZitadelOrgID   string      `json:"zitadel_org_id"`
+	OwnerContactID pgtype.UUID `json:"owner_contact_id"`
+	AddressLine1   string      `json:"address_line1"`
+	AddressLine2   string      `json:"address_line2"`
+	City           string      `json:"city"`
+	Region         string      `json:"region"`
+	PostalCode     string      `json:"postal_code"`
+	Country        string      `json:"country"`
+	Timezone       string      `json:"timezone"`
 }
 
-// slug column defaults to ”. Wave 2 of the slug removal plan drops
-// the column entirely; until then the handler never writes a
-// meaningful slug value.
 func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error) {
 	row := q.db.QueryRow(ctx, createCompany,
 		arg.Name,
 		arg.ZitadelOrgID,
+		arg.OwnerContactID,
 		arg.AddressLine1,
 		arg.AddressLine2,
 		arg.City,
@@ -64,7 +63,6 @@ func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (C
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.Slug,
 		&i.ZitadelOrgID,
 		&i.CreatedAt,
 		&i.ArchivedAt,
@@ -76,6 +74,7 @@ func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (C
 		&i.PostalCode,
 		&i.Country,
 		&i.Timezone,
+		&i.OwnerContactID,
 	)
 	return i, err
 }
@@ -83,7 +82,7 @@ func (q *Queries) CreateCompany(ctx context.Context, arg CreateCompanyParams) (C
 const createWorkspaceCompany = `-- name: CreateWorkspaceCompany :one
 INSERT INTO companies (name, zitadel_org_id, is_workspace_owner)
 VALUES ($1, $2, TRUE)
-RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
+RETURNING id, name, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone, owner_contact_id
 `
 
 type CreateWorkspaceCompanyParams struct {
@@ -104,7 +103,6 @@ func (q *Queries) CreateWorkspaceCompany(ctx context.Context, arg CreateWorkspac
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.Slug,
 		&i.ZitadelOrgID,
 		&i.CreatedAt,
 		&i.ArchivedAt,
@@ -116,23 +114,47 @@ func (q *Queries) CreateWorkspaceCompany(ctx context.Context, arg CreateWorkspac
 		&i.PostalCode,
 		&i.Country,
 		&i.Timezone,
+		&i.OwnerContactID,
 	)
 	return i, err
 }
 
 const getCompany = `-- name: GetCompany :one
-SELECT id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
-FROM companies
-WHERE id = $1 AND archived_at IS NULL
+SELECT
+    c.id, c.name, c.zitadel_org_id, c.created_at, c.archived_at, c.is_workspace_owner, c.address_line1, c.address_line2, c.city, c.region, c.postal_code, c.country, c.timezone, c.owner_contact_id,
+    o.full_name AS owner_full_name
+FROM companies c
+LEFT JOIN contacts o ON o.id = c.owner_contact_id
+WHERE c.id = $1 AND c.archived_at IS NULL
 `
 
-func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, error) {
+type GetCompanyRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	Name             string             `json:"name"`
+	ZitadelOrgID     string             `json:"zitadel_org_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ArchivedAt       pgtype.Timestamptz `json:"archived_at"`
+	IsWorkspaceOwner bool               `json:"is_workspace_owner"`
+	AddressLine1     string             `json:"address_line1"`
+	AddressLine2     string             `json:"address_line2"`
+	City             string             `json:"city"`
+	Region           string             `json:"region"`
+	PostalCode       string             `json:"postal_code"`
+	Country          string             `json:"country"`
+	Timezone         string             `json:"timezone"`
+	OwnerContactID   pgtype.UUID        `json:"owner_contact_id"`
+	OwnerFullName    pgtype.Text        `json:"owner_full_name"`
+}
+
+// Non-archived lookup used by UpdateCompany / UI Detail. LEFT JOIN
+// contacts so the owner's full_name comes back denormalised — saves
+// the SPA a second round-trip.
+func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (GetCompanyRow, error) {
 	row := q.db.QueryRow(ctx, getCompany, id)
-	var i Company
+	var i GetCompanyRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.Slug,
 		&i.ZitadelOrgID,
 		&i.CreatedAt,
 		&i.ArchivedAt,
@@ -144,12 +166,67 @@ func (q *Queries) GetCompany(ctx context.Context, id pgtype.UUID) (Company, erro
 		&i.PostalCode,
 		&i.Country,
 		&i.Timezone,
+		&i.OwnerContactID,
+		&i.OwnerFullName,
+	)
+	return i, err
+}
+
+const getCompanyIncludingArchived = `-- name: GetCompanyIncludingArchived :one
+SELECT
+    c.id, c.name, c.zitadel_org_id, c.created_at, c.archived_at, c.is_workspace_owner, c.address_line1, c.address_line2, c.city, c.region, c.postal_code, c.country, c.timezone, c.owner_contact_id,
+    o.full_name AS owner_full_name
+FROM companies c
+LEFT JOIN contacts o ON o.id = c.owner_contact_id
+WHERE c.id = $1
+`
+
+type GetCompanyIncludingArchivedRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	Name             string             `json:"name"`
+	ZitadelOrgID     string             `json:"zitadel_org_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ArchivedAt       pgtype.Timestamptz `json:"archived_at"`
+	IsWorkspaceOwner bool               `json:"is_workspace_owner"`
+	AddressLine1     string             `json:"address_line1"`
+	AddressLine2     string             `json:"address_line2"`
+	City             string             `json:"city"`
+	Region           string             `json:"region"`
+	PostalCode       string             `json:"postal_code"`
+	Country          string             `json:"country"`
+	Timezone         string             `json:"timezone"`
+	OwnerContactID   pgtype.UUID        `json:"owner_contact_id"`
+	OwnerFullName    pgtype.Text        `json:"owner_full_name"`
+}
+
+// Same as GetCompany but includes archived rows. Used by the Detail
+// page so the operator can still see (and Restore) an archived
+// company via a direct link.
+func (q *Queries) GetCompanyIncludingArchived(ctx context.Context, id pgtype.UUID) (GetCompanyIncludingArchivedRow, error) {
+	row := q.db.QueryRow(ctx, getCompanyIncludingArchived, id)
+	var i GetCompanyIncludingArchivedRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ZitadelOrgID,
+		&i.CreatedAt,
+		&i.ArchivedAt,
+		&i.IsWorkspaceOwner,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.Region,
+		&i.PostalCode,
+		&i.Country,
+		&i.Timezone,
+		&i.OwnerContactID,
+		&i.OwnerFullName,
 	)
 	return i, err
 }
 
 const getWorkspaceCompany = `-- name: GetWorkspaceCompany :one
-SELECT id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
+SELECT id, name, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone, owner_contact_id
 FROM companies
 WHERE is_workspace_owner = TRUE
 LIMIT 1
@@ -162,7 +239,6 @@ func (q *Queries) GetWorkspaceCompany(ctx context.Context) (Company, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.Slug,
 		&i.ZitadelOrgID,
 		&i.CreatedAt,
 		&i.ArchivedAt,
@@ -174,33 +250,54 @@ func (q *Queries) GetWorkspaceCompany(ctx context.Context) (Company, error) {
 		&i.PostalCode,
 		&i.Country,
 		&i.Timezone,
+		&i.OwnerContactID,
 	)
 	return i, err
 }
 
 const listCompanies = `-- name: ListCompanies :many
-SELECT id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
-FROM companies
-WHERE archived_at IS NULL
-  AND is_workspace_owner = FALSE
-ORDER BY created_at DESC
+SELECT
+    c.id, c.name, c.zitadel_org_id, c.created_at, c.archived_at, c.is_workspace_owner, c.address_line1, c.address_line2, c.city, c.region, c.postal_code, c.country, c.timezone, c.owner_contact_id,
+    o.full_name AS owner_full_name
+FROM companies c
+LEFT JOIN contacts o ON o.id = c.owner_contact_id
+WHERE c.is_workspace_owner = FALSE
+ORDER BY c.created_at DESC
 `
 
+type ListCompaniesRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	Name             string             `json:"name"`
+	ZitadelOrgID     string             `json:"zitadel_org_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ArchivedAt       pgtype.Timestamptz `json:"archived_at"`
+	IsWorkspaceOwner bool               `json:"is_workspace_owner"`
+	AddressLine1     string             `json:"address_line1"`
+	AddressLine2     string             `json:"address_line2"`
+	City             string             `json:"city"`
+	Region           string             `json:"region"`
+	PostalCode       string             `json:"postal_code"`
+	Country          string             `json:"country"`
+	Timezone         string             `json:"timezone"`
+	OwnerContactID   pgtype.UUID        `json:"owner_contact_id"`
+	OwnerFullName    pgtype.Text        `json:"owner_full_name"`
+}
+
 // Excludes the MSP row so the operator-facing companies list never
-// shows a customer-shaped record that isn't a customer.
-func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
+// shows a customer-shaped record that isn't a customer. The owner's
+// full_name comes back denormalised via LEFT JOIN.
+func (q *Queries) ListCompanies(ctx context.Context) ([]ListCompaniesRow, error) {
 	rows, err := q.db.Query(ctx, listCompanies)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Company
+	var items []ListCompaniesRow
 	for rows.Next() {
-		var i Company
+		var i ListCompaniesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
-			&i.Slug,
 			&i.ZitadelOrgID,
 			&i.CreatedAt,
 			&i.ArchivedAt,
@@ -212,6 +309,8 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 			&i.PostalCode,
 			&i.Country,
 			&i.Timezone,
+			&i.OwnerContactID,
+			&i.OwnerFullName,
 		); err != nil {
 			return nil, err
 		}
@@ -223,33 +322,69 @@ func (q *Queries) ListCompanies(ctx context.Context) ([]Company, error) {
 	return items, nil
 }
 
+const restoreCompany = `-- name: RestoreCompany :one
+UPDATE companies
+SET archived_at = NULL
+WHERE id = $1
+  AND archived_at IS NOT NULL
+  AND is_workspace_owner = FALSE
+RETURNING id, name, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone, owner_contact_id
+`
+
+// Reverses ArchiveCompany. Rejects the MSP row symmetrically with
+// ArchiveCompany — the workspace row is never archived, so restoring
+// it must be a bug.
+func (q *Queries) RestoreCompany(ctx context.Context, id pgtype.UUID) (Company, error) {
+	row := q.db.QueryRow(ctx, restoreCompany, id)
+	var i Company
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ZitadelOrgID,
+		&i.CreatedAt,
+		&i.ArchivedAt,
+		&i.IsWorkspaceOwner,
+		&i.AddressLine1,
+		&i.AddressLine2,
+		&i.City,
+		&i.Region,
+		&i.PostalCode,
+		&i.Country,
+		&i.Timezone,
+		&i.OwnerContactID,
+	)
+	return i, err
+}
+
 const updateCompany = `-- name: UpdateCompany :one
 UPDATE companies
 SET
-    name          = $2,
-    address_line1 = $3,
-    address_line2 = $4,
-    city          = $5,
-    region        = $6,
-    postal_code   = $7,
-    country       = $8,
-    timezone      = $9
+    name             = $2,
+    owner_contact_id = $3,
+    address_line1    = $4,
+    address_line2    = $5,
+    city             = $6,
+    region           = $7,
+    postal_code      = $8,
+    country          = $9,
+    timezone         = $10
 WHERE id = $1
   AND archived_at IS NULL
   AND is_workspace_owner = FALSE
-RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
+RETURNING id, name, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone, owner_contact_id
 `
 
 type UpdateCompanyParams struct {
-	ID           pgtype.UUID `json:"id"`
-	Name         string      `json:"name"`
-	AddressLine1 string      `json:"address_line1"`
-	AddressLine2 string      `json:"address_line2"`
-	City         string      `json:"city"`
-	Region       string      `json:"region"`
-	PostalCode   string      `json:"postal_code"`
-	Country      string      `json:"country"`
-	Timezone     string      `json:"timezone"`
+	ID             pgtype.UUID `json:"id"`
+	Name           string      `json:"name"`
+	OwnerContactID pgtype.UUID `json:"owner_contact_id"`
+	AddressLine1   string      `json:"address_line1"`
+	AddressLine2   string      `json:"address_line2"`
+	City           string      `json:"city"`
+	Region         string      `json:"region"`
+	PostalCode     string      `json:"postal_code"`
+	Country        string      `json:"country"`
+	Timezone       string      `json:"timezone"`
 }
 
 // Updates a non-workspace company. The WHERE clause guards against
@@ -260,6 +395,7 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 	row := q.db.QueryRow(ctx, updateCompany,
 		arg.ID,
 		arg.Name,
+		arg.OwnerContactID,
 		arg.AddressLine1,
 		arg.AddressLine2,
 		arg.City,
@@ -272,7 +408,6 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.Slug,
 		&i.ZitadelOrgID,
 		&i.CreatedAt,
 		&i.ArchivedAt,
@@ -284,6 +419,7 @@ func (q *Queries) UpdateCompany(ctx context.Context, arg UpdateCompanyParams) (C
 		&i.PostalCode,
 		&i.Country,
 		&i.Timezone,
+		&i.OwnerContactID,
 	)
 	return i, err
 }
@@ -300,7 +436,7 @@ SET
     country       = $7,
     timezone      = $8
 WHERE is_workspace_owner = TRUE
-RETURNING id, name, slug, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone
+RETURNING id, name, zitadel_org_id, created_at, archived_at, is_workspace_owner, address_line1, address_line2, city, region, postal_code, country, timezone, owner_contact_id
 `
 
 type UpdateWorkspaceCompanyParams struct {
@@ -332,7 +468,6 @@ func (q *Queries) UpdateWorkspaceCompany(ctx context.Context, arg UpdateWorkspac
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.Slug,
 		&i.ZitadelOrgID,
 		&i.CreatedAt,
 		&i.ArchivedAt,
@@ -344,6 +479,7 @@ func (q *Queries) UpdateWorkspaceCompany(ctx context.Context, arg UpdateWorkspac
 		&i.PostalCode,
 		&i.Country,
 		&i.Timezone,
+		&i.OwnerContactID,
 	)
 	return i, err
 }

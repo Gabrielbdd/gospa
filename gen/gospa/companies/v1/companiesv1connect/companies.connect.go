@@ -39,12 +39,18 @@ const (
 	// CompaniesServiceListCompaniesProcedure is the fully-qualified name of the CompaniesService's
 	// ListCompanies RPC.
 	CompaniesServiceListCompaniesProcedure = "/gospa.companies.v1.CompaniesService/ListCompanies"
+	// CompaniesServiceGetCompanyProcedure is the fully-qualified name of the CompaniesService's
+	// GetCompany RPC.
+	CompaniesServiceGetCompanyProcedure = "/gospa.companies.v1.CompaniesService/GetCompany"
 	// CompaniesServiceUpdateCompanyProcedure is the fully-qualified name of the CompaniesService's
 	// UpdateCompany RPC.
 	CompaniesServiceUpdateCompanyProcedure = "/gospa.companies.v1.CompaniesService/UpdateCompany"
 	// CompaniesServiceArchiveCompanyProcedure is the fully-qualified name of the CompaniesService's
 	// ArchiveCompany RPC.
 	CompaniesServiceArchiveCompanyProcedure = "/gospa.companies.v1.CompaniesService/ArchiveCompany"
+	// CompaniesServiceRestoreCompanyProcedure is the fully-qualified name of the CompaniesService's
+	// RestoreCompany RPC.
+	CompaniesServiceRestoreCompanyProcedure = "/gospa.companies.v1.CompaniesService/RestoreCompany"
 	// CompaniesServiceGetWorkspaceCompanyProcedure is the fully-qualified name of the
 	// CompaniesService's GetWorkspaceCompany RPC.
 	CompaniesServiceGetWorkspaceCompanyProcedure = "/gospa.companies.v1.CompaniesService/GetWorkspaceCompany"
@@ -57,8 +63,10 @@ const (
 type CompaniesServiceClient interface {
 	CreateCompany(context.Context, *connect.Request[v1.CreateCompanyRequest]) (*connect.Response[v1.CreateCompanyResponse], error)
 	ListCompanies(context.Context, *connect.Request[v1.ListCompaniesRequest]) (*connect.Response[v1.ListCompaniesResponse], error)
+	GetCompany(context.Context, *connect.Request[v1.GetCompanyRequest]) (*connect.Response[v1.GetCompanyResponse], error)
 	UpdateCompany(context.Context, *connect.Request[v1.UpdateCompanyRequest]) (*connect.Response[v1.UpdateCompanyResponse], error)
 	ArchiveCompany(context.Context, *connect.Request[v1.ArchiveCompanyRequest]) (*connect.Response[v1.ArchiveCompanyResponse], error)
+	RestoreCompany(context.Context, *connect.Request[v1.RestoreCompanyRequest]) (*connect.Response[v1.RestoreCompanyResponse], error)
 	GetWorkspaceCompany(context.Context, *connect.Request[v1.GetWorkspaceCompanyRequest]) (*connect.Response[v1.GetWorkspaceCompanyResponse], error)
 	UpdateWorkspaceCompany(context.Context, *connect.Request[v1.UpdateWorkspaceCompanyRequest]) (*connect.Response[v1.UpdateWorkspaceCompanyResponse], error)
 }
@@ -86,6 +94,12 @@ func NewCompaniesServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(companiesServiceMethods.ByName("ListCompanies")),
 			connect.WithClientOptions(opts...),
 		),
+		getCompany: connect.NewClient[v1.GetCompanyRequest, v1.GetCompanyResponse](
+			httpClient,
+			baseURL+CompaniesServiceGetCompanyProcedure,
+			connect.WithSchema(companiesServiceMethods.ByName("GetCompany")),
+			connect.WithClientOptions(opts...),
+		),
 		updateCompany: connect.NewClient[v1.UpdateCompanyRequest, v1.UpdateCompanyResponse](
 			httpClient,
 			baseURL+CompaniesServiceUpdateCompanyProcedure,
@@ -96,6 +110,12 @@ func NewCompaniesServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			httpClient,
 			baseURL+CompaniesServiceArchiveCompanyProcedure,
 			connect.WithSchema(companiesServiceMethods.ByName("ArchiveCompany")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreCompany: connect.NewClient[v1.RestoreCompanyRequest, v1.RestoreCompanyResponse](
+			httpClient,
+			baseURL+CompaniesServiceRestoreCompanyProcedure,
+			connect.WithSchema(companiesServiceMethods.ByName("RestoreCompany")),
 			connect.WithClientOptions(opts...),
 		),
 		getWorkspaceCompany: connect.NewClient[v1.GetWorkspaceCompanyRequest, v1.GetWorkspaceCompanyResponse](
@@ -117,8 +137,10 @@ func NewCompaniesServiceClient(httpClient connect.HTTPClient, baseURL string, op
 type companiesServiceClient struct {
 	createCompany          *connect.Client[v1.CreateCompanyRequest, v1.CreateCompanyResponse]
 	listCompanies          *connect.Client[v1.ListCompaniesRequest, v1.ListCompaniesResponse]
+	getCompany             *connect.Client[v1.GetCompanyRequest, v1.GetCompanyResponse]
 	updateCompany          *connect.Client[v1.UpdateCompanyRequest, v1.UpdateCompanyResponse]
 	archiveCompany         *connect.Client[v1.ArchiveCompanyRequest, v1.ArchiveCompanyResponse]
+	restoreCompany         *connect.Client[v1.RestoreCompanyRequest, v1.RestoreCompanyResponse]
 	getWorkspaceCompany    *connect.Client[v1.GetWorkspaceCompanyRequest, v1.GetWorkspaceCompanyResponse]
 	updateWorkspaceCompany *connect.Client[v1.UpdateWorkspaceCompanyRequest, v1.UpdateWorkspaceCompanyResponse]
 }
@@ -133,6 +155,11 @@ func (c *companiesServiceClient) ListCompanies(ctx context.Context, req *connect
 	return c.listCompanies.CallUnary(ctx, req)
 }
 
+// GetCompany calls gospa.companies.v1.CompaniesService.GetCompany.
+func (c *companiesServiceClient) GetCompany(ctx context.Context, req *connect.Request[v1.GetCompanyRequest]) (*connect.Response[v1.GetCompanyResponse], error) {
+	return c.getCompany.CallUnary(ctx, req)
+}
+
 // UpdateCompany calls gospa.companies.v1.CompaniesService.UpdateCompany.
 func (c *companiesServiceClient) UpdateCompany(ctx context.Context, req *connect.Request[v1.UpdateCompanyRequest]) (*connect.Response[v1.UpdateCompanyResponse], error) {
 	return c.updateCompany.CallUnary(ctx, req)
@@ -141,6 +168,11 @@ func (c *companiesServiceClient) UpdateCompany(ctx context.Context, req *connect
 // ArchiveCompany calls gospa.companies.v1.CompaniesService.ArchiveCompany.
 func (c *companiesServiceClient) ArchiveCompany(ctx context.Context, req *connect.Request[v1.ArchiveCompanyRequest]) (*connect.Response[v1.ArchiveCompanyResponse], error) {
 	return c.archiveCompany.CallUnary(ctx, req)
+}
+
+// RestoreCompany calls gospa.companies.v1.CompaniesService.RestoreCompany.
+func (c *companiesServiceClient) RestoreCompany(ctx context.Context, req *connect.Request[v1.RestoreCompanyRequest]) (*connect.Response[v1.RestoreCompanyResponse], error) {
+	return c.restoreCompany.CallUnary(ctx, req)
 }
 
 // GetWorkspaceCompany calls gospa.companies.v1.CompaniesService.GetWorkspaceCompany.
@@ -157,8 +189,10 @@ func (c *companiesServiceClient) UpdateWorkspaceCompany(ctx context.Context, req
 type CompaniesServiceHandler interface {
 	CreateCompany(context.Context, *connect.Request[v1.CreateCompanyRequest]) (*connect.Response[v1.CreateCompanyResponse], error)
 	ListCompanies(context.Context, *connect.Request[v1.ListCompaniesRequest]) (*connect.Response[v1.ListCompaniesResponse], error)
+	GetCompany(context.Context, *connect.Request[v1.GetCompanyRequest]) (*connect.Response[v1.GetCompanyResponse], error)
 	UpdateCompany(context.Context, *connect.Request[v1.UpdateCompanyRequest]) (*connect.Response[v1.UpdateCompanyResponse], error)
 	ArchiveCompany(context.Context, *connect.Request[v1.ArchiveCompanyRequest]) (*connect.Response[v1.ArchiveCompanyResponse], error)
+	RestoreCompany(context.Context, *connect.Request[v1.RestoreCompanyRequest]) (*connect.Response[v1.RestoreCompanyResponse], error)
 	GetWorkspaceCompany(context.Context, *connect.Request[v1.GetWorkspaceCompanyRequest]) (*connect.Response[v1.GetWorkspaceCompanyResponse], error)
 	UpdateWorkspaceCompany(context.Context, *connect.Request[v1.UpdateWorkspaceCompanyRequest]) (*connect.Response[v1.UpdateWorkspaceCompanyResponse], error)
 }
@@ -182,6 +216,12 @@ func NewCompaniesServiceHandler(svc CompaniesServiceHandler, opts ...connect.Han
 		connect.WithSchema(companiesServiceMethods.ByName("ListCompanies")),
 		connect.WithHandlerOptions(opts...),
 	)
+	companiesServiceGetCompanyHandler := connect.NewUnaryHandler(
+		CompaniesServiceGetCompanyProcedure,
+		svc.GetCompany,
+		connect.WithSchema(companiesServiceMethods.ByName("GetCompany")),
+		connect.WithHandlerOptions(opts...),
+	)
 	companiesServiceUpdateCompanyHandler := connect.NewUnaryHandler(
 		CompaniesServiceUpdateCompanyProcedure,
 		svc.UpdateCompany,
@@ -192,6 +232,12 @@ func NewCompaniesServiceHandler(svc CompaniesServiceHandler, opts ...connect.Han
 		CompaniesServiceArchiveCompanyProcedure,
 		svc.ArchiveCompany,
 		connect.WithSchema(companiesServiceMethods.ByName("ArchiveCompany")),
+		connect.WithHandlerOptions(opts...),
+	)
+	companiesServiceRestoreCompanyHandler := connect.NewUnaryHandler(
+		CompaniesServiceRestoreCompanyProcedure,
+		svc.RestoreCompany,
+		connect.WithSchema(companiesServiceMethods.ByName("RestoreCompany")),
 		connect.WithHandlerOptions(opts...),
 	)
 	companiesServiceGetWorkspaceCompanyHandler := connect.NewUnaryHandler(
@@ -212,10 +258,14 @@ func NewCompaniesServiceHandler(svc CompaniesServiceHandler, opts ...connect.Han
 			companiesServiceCreateCompanyHandler.ServeHTTP(w, r)
 		case CompaniesServiceListCompaniesProcedure:
 			companiesServiceListCompaniesHandler.ServeHTTP(w, r)
+		case CompaniesServiceGetCompanyProcedure:
+			companiesServiceGetCompanyHandler.ServeHTTP(w, r)
 		case CompaniesServiceUpdateCompanyProcedure:
 			companiesServiceUpdateCompanyHandler.ServeHTTP(w, r)
 		case CompaniesServiceArchiveCompanyProcedure:
 			companiesServiceArchiveCompanyHandler.ServeHTTP(w, r)
+		case CompaniesServiceRestoreCompanyProcedure:
+			companiesServiceRestoreCompanyHandler.ServeHTTP(w, r)
 		case CompaniesServiceGetWorkspaceCompanyProcedure:
 			companiesServiceGetWorkspaceCompanyHandler.ServeHTTP(w, r)
 		case CompaniesServiceUpdateWorkspaceCompanyProcedure:
@@ -237,12 +287,20 @@ func (UnimplementedCompaniesServiceHandler) ListCompanies(context.Context, *conn
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("gospa.companies.v1.CompaniesService.ListCompanies is not implemented"))
 }
 
+func (UnimplementedCompaniesServiceHandler) GetCompany(context.Context, *connect.Request[v1.GetCompanyRequest]) (*connect.Response[v1.GetCompanyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("gospa.companies.v1.CompaniesService.GetCompany is not implemented"))
+}
+
 func (UnimplementedCompaniesServiceHandler) UpdateCompany(context.Context, *connect.Request[v1.UpdateCompanyRequest]) (*connect.Response[v1.UpdateCompanyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("gospa.companies.v1.CompaniesService.UpdateCompany is not implemented"))
 }
 
 func (UnimplementedCompaniesServiceHandler) ArchiveCompany(context.Context, *connect.Request[v1.ArchiveCompanyRequest]) (*connect.Response[v1.ArchiveCompanyResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("gospa.companies.v1.CompaniesService.ArchiveCompany is not implemented"))
+}
+
+func (UnimplementedCompaniesServiceHandler) RestoreCompany(context.Context, *connect.Request[v1.RestoreCompanyRequest]) (*connect.Response[v1.RestoreCompanyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("gospa.companies.v1.CompaniesService.RestoreCompany is not implemented"))
 }
 
 func (UnimplementedCompaniesServiceHandler) GetWorkspaceCompany(context.Context, *connect.Request[v1.GetWorkspaceCompanyRequest]) (*connect.Response[v1.GetWorkspaceCompanyResponse], error) {

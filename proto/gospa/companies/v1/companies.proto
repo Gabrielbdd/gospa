@@ -15,10 +15,21 @@ package gospa.companies.v1;
 service CompaniesService {
   rpc CreateCompany(CreateCompanyRequest) returns (CreateCompanyResponse);
   rpc ListCompanies(ListCompaniesRequest) returns (ListCompaniesResponse);
+  rpc GetCompany(GetCompanyRequest) returns (GetCompanyResponse);
   rpc UpdateCompany(UpdateCompanyRequest) returns (UpdateCompanyResponse);
   rpc ArchiveCompany(ArchiveCompanyRequest) returns (ArchiveCompanyResponse);
+  rpc RestoreCompany(RestoreCompanyRequest) returns (RestoreCompanyResponse);
   rpc GetWorkspaceCompany(GetWorkspaceCompanyRequest) returns (GetWorkspaceCompanyResponse);
   rpc UpdateWorkspaceCompany(UpdateWorkspaceCompanyRequest) returns (UpdateWorkspaceCompanyResponse);
+}
+
+// Owner is the denormalised view of the contact assigned as the
+// company's account owner. The row lives in `contacts`; this sub-
+// message is populated on reads via LEFT JOIN so the SPA does not need
+// a second round-trip to render the owner's name next to each company.
+message Owner {
+  string contact_id = 1;
+  string full_name = 2;
 }
 
 // Address groups the operator-facing address fields shared by every
@@ -39,8 +50,9 @@ message Address {
 message Company {
   string id = 1;
   string name = 2;
-  // Field 3 (slug) removed in Wave 1 of the slug removal plan. The DB
-  // column stays temporarily; Slice 7 drops it.
+  // Field 3 (slug) and the underlying companies.slug column were
+  // dropped in Slice 7 of the team-contacts-unified change.
+  // Reserved so the field number and name cannot be reused.
   reserved 3;
   reserved "slug";
   string zitadel_org_id = 4;
@@ -52,14 +64,22 @@ message Company {
   // and on UpdateWorkspaceCompanyResponse so the SPA can assert the
   // row it just fetched really is the MSP.
   bool is_workspace_owner = 8;
+  // owner is empty when no contact is assigned (owner_contact_id is
+  // NULL in the DB). Client writes the owner by setting
+  // owner_contact_id on Create/Update; the server returns the
+  // denormalised Owner on reads.
+  Owner owner = 9;
 }
 
 message CreateCompanyRequest {
   string name = 1;
-  // Field 2 (slug) removed in Wave 1 of the slug removal plan.
+  // Field 2 (slug) removed in Slice 7. Reserved so the field number
+  // and name cannot be reused.
   reserved 2;
   reserved "slug";
   Address address = 3;
+  // Empty string leaves owner_contact_id NULL (unowned company).
+  string owner_contact_id = 4;
 }
 
 message CreateCompanyResponse {
@@ -72,10 +92,20 @@ message ListCompaniesResponse {
   repeated Company companies = 1;
 }
 
+message GetCompanyRequest {
+  string id = 1;
+}
+
+message GetCompanyResponse {
+  Company company = 1;
+}
+
 message UpdateCompanyRequest {
   string id = 1;
   string name = 2;
   Address address = 3;
+  // Empty string clears the owner (sets the column to NULL).
+  string owner_contact_id = 4;
 }
 
 message UpdateCompanyResponse {
@@ -87,6 +117,14 @@ message ArchiveCompanyRequest {
 }
 
 message ArchiveCompanyResponse {}
+
+message RestoreCompanyRequest {
+  string id = 1;
+}
+
+message RestoreCompanyResponse {
+  Company company = 1;
+}
 
 message GetWorkspaceCompanyRequest {}
 

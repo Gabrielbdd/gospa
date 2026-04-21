@@ -143,7 +143,6 @@ func (ns NullWorkspaceRole) Value() (driver.Value, error) {
 type Company struct {
 	ID               pgtype.UUID        `json:"id"`
 	Name             string             `json:"name"`
-	Slug             string             `json:"slug"`
 	ZitadelOrgID     string             `json:"zitadel_org_id"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	ArchivedAt       pgtype.Timestamptz `json:"archived_at"`
@@ -155,6 +154,7 @@ type Company struct {
 	PostalCode       string             `json:"postal_code"`
 	Country          string             `json:"country"`
 	Timezone         string             `json:"timezone"`
+	OwnerContactID   pgtype.UUID        `json:"owner_contact_id"`
 }
 
 type Contact struct {
@@ -176,7 +176,6 @@ type Contact struct {
 type Workspace struct {
 	ID                   int16                 `json:"id"`
 	Name                 string                `json:"name"`
-	Slug                 string                `json:"slug"`
 	Timezone             string                `json:"timezone"`
 	CurrencyCode         string                `json:"currency_code"`
 	InstallState         WorkspaceInstallState `json:"install_state"`

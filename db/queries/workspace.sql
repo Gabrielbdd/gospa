@@ -6,7 +6,6 @@
 SELECT
     id,
     name,
-    slug,
     timezone,
     currency_code,
     install_state,
@@ -24,8 +23,6 @@ FROM workspace
 WHERE id = 1;
 
 -- name: MarkWorkspaceProvisioning :exec
--- slug column is no longer written by the install flow (Wave 1 of
--- slug removal). Wave 2 drops the column entirely.
 UPDATE workspace
 SET
     name          = $1,

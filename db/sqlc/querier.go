@@ -33,9 +33,6 @@ type Querier interface {
 	// index workspace_grants_active_admins from 00007 makes this a
 	// micro-cheap lookup.
 	CountActiveAdmins(ctx context.Context) (int64, error)
-	// slug column defaults to ''. Wave 2 of the slug removal plan drops
-	// the column entirely; until then the handler never writes a
-	// meaningful slug value.
 	CreateCompany(ctx context.Context, arg CreateCompanyParams) (Company, error)
 	// Inserts a contact in the given company. Identity columns
 	// (zitadel_user_id, identity_source, external_id) are accepted as
@@ -55,7 +52,14 @@ type Querier interface {
 	// install-time admin grant; the team invite flow will pass
 	// 'not_signed_in_yet' for new members.
 	CreateWorkspaceGrant(ctx context.Context, arg CreateWorkspaceGrantParams) (WorkspaceGrant, error)
-	GetCompany(ctx context.Context, id pgtype.UUID) (Company, error)
+	// Non-archived lookup used by UpdateCompany / UI Detail. LEFT JOIN
+	// contacts so the owner's full_name comes back denormalised — saves
+	// the SPA a second round-trip.
+	GetCompany(ctx context.Context, id pgtype.UUID) (GetCompanyRow, error)
+	// Same as GetCompany but includes archived rows. Used by the Detail
+	// page so the operator can still see (and Restore) an archived
+	// company via a direct link.
+	GetCompanyIncludingArchived(ctx context.Context, id pgtype.UUID) (GetCompanyIncludingArchivedRow, error)
 	// Returns the active contact by id. Used by handlers that accept a
 	// contact_id from the wire (TeamService change-role/suspend/archive,
 	// ContactsService single-record operations).
@@ -69,8 +73,9 @@ type Querier interface {
 	// Returns the singleton MSP row. Used by /settings/workspace (Slice 5).
 	GetWorkspaceCompany(ctx context.Context) (Company, error)
 	// Excludes the MSP row so the operator-facing companies list never
-	// shows a customer-shaped record that isn't a customer.
-	ListCompanies(ctx context.Context) ([]Company, error)
+	// shows a customer-shaped record that isn't a customer. The owner's
+	// full_name comes back denormalised via LEFT JOIN.
+	ListCompanies(ctx context.Context) ([]ListCompaniesRow, error)
 	// Returns every active contact at the given company, ordered by name
 	// so the UI's default sort is stable. Excludes archived rows.
 	ListContactsByCompany(ctx context.Context, companyID pgtype.UUID) ([]Contact, error)
@@ -79,8 +84,6 @@ type Querier interface {
 	// admin appears first and the list is stable across calls.
 	ListTeamMembers(ctx context.Context) ([]ListTeamMembersRow, error)
 	MarkWorkspaceFailed(ctx context.Context, installError pgtype.Text) error
-	// slug column is no longer written by the install flow (Wave 1 of
-	// slug removal). Wave 2 drops the column entirely.
 	MarkWorkspaceProvisioning(ctx context.Context, arg MarkWorkspaceProvisioningParams) error
 	MarkWorkspaceReady(ctx context.Context) error
 	PersistZitadelIDs(ctx context.Context, arg PersistZitadelIDsParams) error
@@ -94,6 +97,10 @@ type Querier interface {
 	// LEFT JOIN keeps a contact-without-grant valid; the middleware then
 	// decides 401 vs 403 based on whether the grant exists.
 	ResolveTeamCallerByZitadelUserID(ctx context.Context, zitadelUserID pgtype.Text) (ResolveTeamCallerByZitadelUserIDRow, error)
+	// Reverses ArchiveCompany. Rejects the MSP row symmetrically with
+	// ArchiveCompany — the workspace row is never archived, so restoring
+	// it must be a bug.
+	RestoreCompany(ctx context.Context, id pgtype.UUID) (Company, error)
 	// Throttled in-memory by the middleware; this query is fired only when
 	// the in-memory check decides the persisted value is stale. Setting
 	// last_seen_at = now() unconditionally is intentional: the throttle

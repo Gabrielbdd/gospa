@@ -15,7 +15,6 @@ const getWorkspace = `-- name: GetWorkspace :one
 SELECT
     id,
     name,
-    slug,
     timezone,
     currency_code,
     install_state,
@@ -43,7 +42,6 @@ func (q *Queries) GetWorkspace(ctx context.Context) (Workspace, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
-		&i.Slug,
 		&i.Timezone,
 		&i.CurrencyCode,
 		&i.InstallState,
@@ -91,8 +89,6 @@ type MarkWorkspaceProvisioningParams struct {
 	CurrencyCode string `json:"currency_code"`
 }
 
-// slug column is no longer written by the install flow (Wave 1 of
-// slug removal). Wave 2 drops the column entirely.
 func (q *Queries) MarkWorkspaceProvisioning(ctx context.Context, arg MarkWorkspaceProvisioningParams) error {
 	_, err := q.db.Exec(ctx, markWorkspaceProvisioning, arg.Name, arg.Timezone, arg.CurrencyCode)
 	return err

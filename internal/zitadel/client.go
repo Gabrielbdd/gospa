@@ -190,18 +190,24 @@ type addOrgWireRequest struct {
 }
 
 type addOrgWireResponse struct {
-	ID string `json:"id"`
+	OrganizationID string `json:"organizationId"`
 }
 
 // AddOrganization creates a new organization inside the ZITADEL instance
 // without seeding a human admin. Used by the company-creation flow where
 // the MSP manages the org on behalf of a client.
+//
+// Uses /v2beta/organizations — the legacy /admin/v1/orgs endpoint was
+// removed in ZITADEL v3. The v2 path expects {"name": "..."} and
+// returns {"organizationId": "...", "details": {...}}. Once ZITADEL
+// promotes v2 out of beta the URL will drop the "beta" suffix; until
+// then v2beta is the only working create-org endpoint.
 func (c *HTTPClient) AddOrganization(ctx context.Context, name string) (string, error) {
 	var out addOrgWireResponse
-	if err := c.post(ctx, "/admin/v1/orgs", "", addOrgWireRequest{Name: name}, &out); err != nil {
+	if err := c.post(ctx, "/v2beta/organizations", "", addOrgWireRequest{Name: name}, &out); err != nil {
 		return "", fmt.Errorf("zitadel AddOrganization: %w", err)
 	}
-	return out.ID, nil
+	return out.OrganizationID, nil
 }
 
 // RemoveOrg deletes an organisation. ZITADEL cascades the delete to the
