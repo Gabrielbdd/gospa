@@ -92,10 +92,12 @@ ADR.
 | TanStack Router | `^1.100` | client routing + loaders | `web/src/main.tsx`, `web/src/routes/` |
 | TanStack Query | `^5.66` | RPC cache for Connect + install polling | `web/src/routes/index.tsx`, `routes/install.tsx` |
 | TanStack Form | `^1.0` | install wizard form state | `web/src/routes/install.tsx` |
+| TanStack Table | `^8.21` | column defs + sorting for every list screen; pair with shadcn `Table` primitive | `web/src/components/{tickets,companies,team}/*-columns.tsx` |
 | `react-oidc-context` | `^3.3.1` | React wrapper around `oidc-client-ts` for sign-in/out + session | `web/src/lib/auth-provider.tsx` |
 | `oidc-client-ts` | `^3.5.0` | OIDC code exchange + storage | indirect via `react-oidc-context` |
 | Tailwind v4 | `^4.0` | utility CSS | `web/src/styles.css`, `@tailwindcss/vite` |
-| shadcn/ui (`@radix-ui/react-slot` + `class-variance-authority` + `clsx` + `tailwind-merge`) | various | accessible component primitives | `web/src/components/ui/` |
+| shadcn/ui (Radix via `radix-ui` umbrella + `class-variance-authority` + `clsx` + `tailwind-merge`) | various | accessible component primitives (Dialog, Popover, DropdownMenu, Sonner, Table…) | `web/src/components/ui/` |
+| `sonner` | `^2.0` | toast queue, mounted once in `main.tsx` as `<Toaster />` | `web/src/components/ui/sonner.tsx` |
 | `lucide-react` | `^0.474` | icons | components |
 | Vite | `^6.1` | dev server (port `:5173`) + production build into `web/dist` | `web/vite.config.ts` |
 
