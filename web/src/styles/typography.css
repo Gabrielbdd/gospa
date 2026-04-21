@@ -142,15 +142,22 @@ kbd {
 
 /* ---------------------------------------------------------
    Links & rules
+
+   Prose-style links (underlined, hover accent) apply only inside
+   prose regions. App UI links — nav, buttons, breadcrumbs — use
+   TanStack Link / Tailwind directly and must not inherit this
+   baseline styling.
    --------------------------------------------------------- */
-a {
+.prose a,
+[data-prose] a {
   color: var(--fg-1);
   text-decoration: none;
   border-bottom: 1px solid var(--border-strong);
   transition: color var(--dur-fast) var(--ease-out),
               border-color var(--dur-fast) var(--ease-out);
 }
-a:hover {
+.prose a:hover,
+[data-prose] a:hover {
   color: var(--accent-hover);
   border-bottom-color: var(--accent-hover);
 }
@@ -158,4 +165,24 @@ hr {
   border: 0;
   border-top: 1px solid var(--border-default);
   margin: var(--space-8, 32px) 0;
+}
+
+/* ---------------------------------------------------------
+   Async-state animations — used by skeletons, spinners,
+   the refreshing pulse dot, and row enter transitions.
+   --------------------------------------------------------- */
+@keyframes gospaShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes gospaSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes gospaPulse {
+  0%, 100% { opacity: 1;    transform: scale(1); }
+  50%      { opacity: 0.35; transform: scale(0.85); }
+}
+@keyframes gospaRowIn {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

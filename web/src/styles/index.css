@@ -88,12 +88,22 @@
   --color-foreground:           var(--fg-1);
   --color-card:                 var(--surface);
   --color-card-foreground:      var(--fg-1);
+  --color-popover:              var(--subtle);
+  --color-popover-foreground:   var(--fg-1);
   --color-primary:              var(--gray-1000);
   --color-primary-foreground:   var(--app);
+  --color-secondary:            var(--elevated);
+  --color-secondary-foreground: var(--fg-1);
   --color-muted:                var(--elevated);
   --color-muted-foreground:     var(--fg-3);
+  /* Note: shadcn's `accent` means "subtle hover bg" (menus, focused
+     rows). Our `--color-accent` above is the Vercel Blue brand. We
+     edit the shadcn-installed primitives (popover/dropdown-menu/etc)
+     to use `bg-elevated`/`text-fg-1` directly so the two meanings
+     do not collide on a single token. */
   --color-border:               var(--border-default);
   --color-input:                var(--border-default);
+  --color-ring:                 var(--ring);
   --color-destructive:          var(--danger);
   --color-destructive-foreground: var(--accent-fg);
 

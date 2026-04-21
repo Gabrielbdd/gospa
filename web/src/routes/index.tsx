@@ -1,15 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
-import { createRoute, redirect } from "@tanstack/react-router";
+import { createRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "react-oidc-context";
 
 import { Button } from "@/components/ui/button";
-import { listCompanies } from "@/lib/companies-client";
 import { getStatus } from "@/lib/install-client";
 import { getLastLoginEmail, setLastLoginEmail } from "@/lib/login-hint";
 import { runtimeConfig } from "@/lib/runtime-config";
 import { rootRoute } from "@/routes/__root";
 
+// "/" is the pre-login landing page. Once the operator has a session
+// the Tickets list becomes the home screen — the effect below pushes
+// them there as soon as auth resolves.
 export const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
@@ -27,45 +28,25 @@ function HomePage() {
   const { zitadelOrgId } = indexRoute.useLoaderData();
   const configOrgId = runtimeConfig.auth?.orgId ?? "";
   const auth = useAuth();
-  const accessToken = auth.user?.access_token;
+  const navigate = useNavigate();
 
-  // Persist the email of every successful sign-in so the next click
-  // of the Log-in button hands ZITADEL a login_hint and the operator
-  // does not have to retype it.
   useEffect(() => {
     if (auth.isAuthenticated) {
       const email = auth.user?.profile.email;
       if (typeof email === "string") {
         setLastLoginEmail(email);
       }
+      void navigate({
+        to: "/tickets",
+        search: { view: "all", company: "", q: "" },
+        replace: true,
+      });
     }
-  }, [auth.isAuthenticated, auth.user?.profile.email]);
+  }, [auth.isAuthenticated, auth.user?.profile.email, navigate]);
 
-  // Companies probe: a single ListCompanies call that proves the
-  // end-to-end auth contract works (token type, audience, issuer,
-  // gate, JWT verifier all aligned). Only enabled when authenticated;
-  // a 401 here means the bearer is missing or rejected, which is the
-  // cheapest signal to surface the failure during S9 manual e2e.
-  const companies = useQuery({
-    queryKey: ["companies", accessToken],
-    queryFn: () => listCompanies(accessToken!),
-    enabled: auth.isAuthenticated && !!accessToken,
-    retry: false,
-  });
-
-  // Authoritative source: GetStatus, which the loader just called.
-  // Runtime config (from /_gofra/config.js) is a page-load snapshot
-  // and may be stale if the operator somehow landed on / via SPA
-  // navigation before the install flow's full reload took effect.
   const effectiveOrgId = zitadelOrgId || configOrgId;
-
-  // Belt-and-suspenders: if config.js snapshot disagrees with the live
-  // workspace (install just completed, page was not reloaded), force
-  // one reload now so /_gofra/config.js is re-executed and the rest
-  // of the app (including react-oidc-context, which read the issuer +
-  // client_id + scopes from runtimeConfig at provider construction)
-  // sees the post-install state.
   const configIsStale = !!zitadelOrgId && configOrgId !== zitadelOrgId;
+
   useEffect(() => {
     if (configIsStale) {
       window.location.reload();
@@ -74,96 +55,49 @@ function HomePage() {
 
   if (configIsStale) {
     return (
-      <main className="mx-auto max-w-3xl p-8 text-muted-foreground">
-        Refreshing runtime config…
+      <main className="flex h-screen items-center justify-center bg-app text-[13px] text-fg-3">
+        Atualizando configuração…
       </main>
     );
   }
 
-  // While the auth library is still bootstrapping (e.g. silent renewal
-  // on first paint) we render a tiny placeholder so the login button
-  // doesn't flicker between "Log in" and "Log out".
   if (auth.isLoading) {
     return (
-      <main className="mx-auto max-w-3xl p-8 text-muted-foreground">
-        Loading session…
+      <main className="flex h-screen items-center justify-center bg-app text-[13px] text-fg-3">
+        Carregando sessão…
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-8">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">
+    <main className="flex h-screen items-center justify-center bg-app">
+      <div className="w-[360px] rounded-xl border border-border-default bg-subtle p-6 shadow-md">
+        <h1 className="mb-1.5 text-xl font-semibold tracking-tight text-fg-1">
           {runtimeConfig.appName ?? "Gospa"}
         </h1>
-        <p className="text-muted-foreground">
-          {auth.isAuthenticated
-            ? `Signed in as ${auth.user?.profile.email ?? auth.user?.profile.sub ?? "unknown"}.`
-            : "Workspace installed. Sign in to manage your MSP."}
+        <p className="mb-5 text-[13px] text-fg-3">
+          Entre para gerenciar seu workspace.
         </p>
-      </header>
-      <div className="flex gap-3">
-        {auth.isAuthenticated ? (
-          <Button
-            onClick={() => {
-              // Clear local state first so a slow ZITADEL logout does
-              // not leave a half-authenticated session on screen.
-              void auth.removeUser().then(() =>
-                auth.signoutRedirect({
-                  post_logout_redirect_uri:
-                    window.location.origin +
-                    (runtimeConfig.auth?.postLogoutRedirectPath || "/"),
-                }),
-              );
-            }}
-          >
-            Log out
-          </Button>
-        ) : (
-          <Button
-            onClick={() => {
-              const hint = getLastLoginEmail();
-              void auth.signinRedirect(
-                hint ? { login_hint: hint } : undefined,
-              );
-            }}
-            disabled={!effectiveOrgId}
-          >
-            Log in
-          </Button>
+        <Button
+          className="w-full"
+          onClick={() => {
+            const hint = getLastLoginEmail();
+            void auth.signinRedirect(hint ? { login_hint: hint } : undefined);
+          }}
+          disabled={!effectiveOrgId}
+        >
+          Entrar
+        </Button>
+        {!effectiveOrgId && (
+          <p className="mt-3 text-[11px] text-fg-4">
+            Login indisponível — configuração do workspace ainda não
+            resolvida.
+          </p>
         )}
-        <Button variant="outline">Documentation</Button>
+        {auth.error && (
+          <p className="mt-3 text-[11px] text-danger">{auth.error.message}</p>
+        )}
       </div>
-      {!effectiveOrgId && !auth.isAuthenticated && (
-        <p className="text-xs text-muted-foreground">
-          Login disabled — workspace auth.orgId has not been resolved yet.
-        </p>
-      )}
-      {auth.error && (
-        <p className="text-xs text-destructive">{auth.error.message}</p>
-      )}
-      {auth.isAuthenticated && (
-        <section className="rounded-md border border-border bg-card p-4">
-          <h2 className="text-sm font-semibold">Companies probe</h2>
-          {companies.isLoading && (
-            <p className="text-xs text-muted-foreground">
-              Fetching ListCompanies with the bearer token…
-            </p>
-          )}
-          {companies.error && (
-            <p className="text-xs text-destructive">
-              Authenticated RPC failed: {(companies.error as Error).message}
-            </p>
-          )}
-          {companies.data && (
-            <p className="text-xs text-muted-foreground">
-              Authenticated RPC OK — {companies.data.companies?.length ?? 0}{" "}
-              company/companies returned.
-            </p>
-          )}
-        </section>
-      )}
     </main>
   );
 }

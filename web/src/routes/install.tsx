@@ -122,9 +122,9 @@ function InstallPage() {
     <main className="mx-auto max-w-2xl space-y-6 p-8">
       <SecurityBanner />
       <header className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">Install Gospa</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Instalar Gospa</h1>
         <p className="text-muted-foreground">
-          Create your MSP workspace and the first admin user.
+          Crie o workspace do MSP e o primeiro usuário admin.
         </p>
       </header>
 
@@ -142,8 +142,8 @@ function InstallPage() {
           <form.Field name="installToken">
             {(field) => (
               <Field
-                label="Install token"
-                hint="Local dev: cat .secrets/install-token. Production: copy from container logs (search for 'install token')."
+                label="Token de instalação"
+                hint="Dev local: cat .secrets/install-token. Produção: copie dos logs do container (procure por 'install token')."
               >
                 <input
                   className={inputClass}
@@ -159,7 +159,7 @@ function InstallPage() {
           </form.Field>
           <form.Field name="workspaceName">
             {(field) => (
-              <Field label="Workspace name">
+              <Field label="Nome do workspace">
                 <input
                   className={inputClass}
                   value={field.state.value}
@@ -172,7 +172,7 @@ function InstallPage() {
           <div className="grid grid-cols-2 gap-3">
             <form.Field name="timezone">
               {(field) => (
-                <Field label="Timezone">
+                <Field label="Fuso horário">
                   <input
                     className={inputClass}
                     value={field.state.value}
@@ -184,7 +184,7 @@ function InstallPage() {
             </form.Field>
             <form.Field name="currencyCode">
               {(field) => (
-                <Field label="Currency">
+                <Field label="Moeda">
                   <input
                     className={inputClass}
                     value={field.state.value}
@@ -199,7 +199,7 @@ function InstallPage() {
             </form.Field>
           </div>
 
-          <h2 className="pt-2 text-lg font-semibold">Initial admin</h2>
+          <h2 className="pt-2 text-lg font-semibold">Admin inicial</h2>
           <form.Field name="email">
             {(field) => (
               <Field label="Email">
@@ -216,7 +216,7 @@ function InstallPage() {
           <div className="grid grid-cols-2 gap-3">
             <form.Field name="givenName">
               {(field) => (
-                <Field label="First name">
+                <Field label="Nome">
                   <input
                     className={inputClass}
                     value={field.state.value}
@@ -228,7 +228,7 @@ function InstallPage() {
             </form.Field>
             <form.Field name="familyName">
               {(field) => (
-                <Field label="Last name">
+                <Field label="Sobrenome">
                   <input
                     className={inputClass}
                     value={field.state.value}
@@ -243,8 +243,8 @@ function InstallPage() {
             <form.Field name="password">
               {(field) => (
                 <Field
-                  label="Initial password"
-                  hint="Min 8 chars. ZITADEL also requires digit + case."
+                  label="Senha inicial"
+                  hint="Mínimo 8 caracteres, com um dígito e letras maiúsculas e minúsculas."
                 >
                   <input
                     type="password"
@@ -265,8 +265,8 @@ function InstallPage() {
                   form.state.values.password !== field.state.value;
                 return (
                   <Field
-                    label="Confirm password"
-                    hint={mismatch ? "Passwords do not match." : undefined}
+                    label="Confirmar senha"
+                    hint={mismatch ? "As senhas não coincidem." : undefined}
                   >
                     <input
                       type="password"
@@ -294,7 +294,7 @@ function InstallPage() {
 
           <div className="pt-2">
             <Button type="submit" disabled={installMutation.isPending}>
-              {installMutation.isPending ? "Starting…" : "Install"}
+              {installMutation.isPending ? "Iniciando…" : "Instalar"}
             </Button>
           </div>
         </form>
@@ -318,11 +318,11 @@ function SecurityBanner() {
 
 function InstallStatus({ state, error }: { state: InstallState; error?: string }) {
   const label: Record<InstallState, string> = {
-    INSTALL_STATE_UNSPECIFIED: "Unknown state",
-    INSTALL_STATE_NOT_INITIALIZED: "Ready to install",
-    INSTALL_STATE_PROVISIONING: "Provisioning ZITADEL org, project, and app…",
-    INSTALL_STATE_READY: "Install complete. Redirecting…",
-    INSTALL_STATE_FAILED: "Install failed.",
+    INSTALL_STATE_UNSPECIFIED: "Estado desconhecido",
+    INSTALL_STATE_NOT_INITIALIZED: "Pronto para instalar",
+    INSTALL_STATE_PROVISIONING: "Preparando seu workspace…",
+    INSTALL_STATE_READY: "Instalação concluída. Redirecionando…",
+    INSTALL_STATE_FAILED: "Falha na instalação.",
   };
   return (
     <section className="rounded-md border border-border bg-card p-4">
@@ -334,7 +334,7 @@ function InstallStatus({ state, error }: { state: InstallState; error?: string }
       )}
       {state === "INSTALL_STATE_PROVISIONING" && (
         <p className="mt-2 text-sm text-muted-foreground">
-          Polling once per second. This usually takes a few seconds.
+          Verificando uma vez por segundo. Costuma levar poucos segundos.
         </p>
       )}
     </section>

@@ -28,13 +28,11 @@ function AuthCallbackPage() {
   if (auth.error) {
     return (
       <main className="mx-auto max-w-2xl space-y-3 p-8">
-        <h1 className="text-2xl font-bold tracking-tight">Login failed</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Falha no login</h1>
         <p className="text-sm text-destructive">{auth.error.message}</p>
         <p className="text-sm text-muted-foreground">
-          Return to <a className="underline" href="/">the home page</a> and try
-          again. If this keeps happening, check the install token, the ZITADEL
-          issuer URL, and that the OIDC application's redirect URI matches{" "}
-          <code>{window.location.origin}/auth/callback</code>.
+          Volte para a <a className="underline" href="/">página inicial</a> e
+          tente de novo. Se continuar, contate o administrador do workspace.
         </p>
       </main>
     );
@@ -42,7 +40,7 @@ function AuthCallbackPage() {
 
   return (
     <main className="mx-auto max-w-2xl p-8 text-muted-foreground">
-      Completing sign-in…
+      Finalizando login…
     </main>
   );
 }
